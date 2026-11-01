@@ -1,9 +1,13 @@
 package com.possaas.possaasbackend.tenant;
 
+import com.possaas.possaasbackend.common.pagination.PageResponse;
+import com.possaas.possaasbackend.common.pagination.PaginationUtils;
 import com.possaas.possaasbackend.common.response.ApiResponse;
 import com.possaas.possaasbackend.tenant.dto.TenantRequest;
 import com.possaas.possaasbackend.tenant.dto.TenantResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,13 +43,22 @@ public class TenantController {
         return ResponseEntity.ok(ApiResponse.success("Tenant updated successfully", TenantResponse.fromEntity(tenant)));
     }
 
-    // Get all tenants
+    // Get all tenants with pagination
     @GetMapping
-    public ResponseEntity<ApiResponse<List<TenantResponse>>> getAllTenants() {
-        List<TenantResponse> tenants = tenantService.getAllTenants().stream()
+    public ResponseEntity<ApiResponse<PageResponse<TenantResponse>>> getAllTenants(
+            @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_NUMBER) int page,
+            @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_SIZE) int size,
+            @RequestParam(defaultValue = PaginationUtils.DEFAULT_SORT_BY) String sortBy,
+            @RequestParam(defaultValue = PaginationUtils.DEFAULT_SORT_DIRECTION) String sortDir
+    ) {
+        Pageable pageable = PaginationUtils.createPageable(page, size, sortBy, sortDir);
+        Page<Tenant> tenantPage = tenantService.getAllTenants(pageable);
+        List<TenantResponse> tenantResponses = tenantPage.getContent().stream()
                 .map(TenantResponse::fromEntity)
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Tenants fetched successfully", tenants));
+        PageResponse<TenantResponse> pageResponse = PageResponse.of(tenantPage, tenantResponses);
+
+        return ResponseEntity.ok(ApiResponse.success("Tenants fetched successfully", pageResponse));
     }
 
     // Get tenant by ID

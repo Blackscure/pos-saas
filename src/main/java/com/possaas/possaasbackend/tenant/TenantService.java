@@ -1,6 +1,8 @@
 package com.possaas.possaasbackend.tenant;
 
 import com.possaas.possaasbackend.tenant.dto.TenantRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -121,6 +123,12 @@ public class TenantService {
         tenant.setActive(updatedTenant.isActive());
 
         return tenantRepository.save(tenant);
+    }
+
+    // Get all tenants with pagination
+    @Transactional(readOnly = true)
+    public Page<Tenant> getAllTenants(Pageable pageable) {
+        return tenantRepository.findAll(pageable);
     }
 
     // Get all tenants
