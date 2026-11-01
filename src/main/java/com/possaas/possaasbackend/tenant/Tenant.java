@@ -1,9 +1,13 @@
 package com.possaas.possaasbackend.tenant;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Getter
 @Entity
 @Table(name = "tenants")
 
@@ -13,15 +17,19 @@ Tenant {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Setter
     @Column(nullable = false, unique = true, length = 150)
     private String name;
 
+    @Setter
     @Column(nullable = false, unique = true, length = 100)
     private String code;
 
+    @Setter
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
+    @Setter
     @Column(nullable = false)
     private boolean active = true;
 
@@ -47,47 +55,4 @@ Tenant {
     public Tenant() {
     }
 
-    public UUID getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
 }
