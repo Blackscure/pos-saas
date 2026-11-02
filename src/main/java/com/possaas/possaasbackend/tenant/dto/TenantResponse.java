@@ -1,5 +1,6 @@
 package com.possaas.possaasbackend.tenant.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.possaas.possaasbackend.tenant.Tenant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,11 @@ public class TenantResponse {
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @JsonProperty("status")
+    public boolean getStatus() {
+        return active;
+    }
 
     public static TenantResponse fromEntity(Tenant tenant) {
         if (tenant == null) {

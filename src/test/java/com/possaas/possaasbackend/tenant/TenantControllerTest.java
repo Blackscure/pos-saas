@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -176,5 +177,37 @@ class TenantControllerTest {
                 .andExpect(jsonPath("$.data.pageSize").value(10))
                 .andExpect(jsonPath("$.data.totalElements").value(1))
                 .andExpect(jsonPath("$.data.totalPages").value(1));
+    }
+
+    @Test
+    void deleteTenant_Success() throws Exception {
+        UUID id = UUID.randomUUID();
+        Tenant tenant = new Tenant();
+        tenant.setName("Test Tenant");
+        tenant.setCode("TEST01");
+        tenant.setEmail("tenant@example.com");
+        tenant.setActive(false);
+
+        when(tenantService.deleteTenant(id)).thenReturn(tenant);
+
+        mockMvc.perform(delete("/api/tenants/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Tenant deleted successfully"))
+                .andExpect(jsonPath("$.data.active").value(false))
+                .andExpect(jsonPath("$.data.status").value(false));
+    }
+
+    @Test
+    void deleteTenant_NotFound_ReturnsFalseWithMessage() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(tenantService.deleteTenant(id))
+                .thenThrow(new IllegalArgumentException("Tenant not found"));
+
+        mockMvc.perform(delete("/api/tenants/" + id))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Tenant not found"))
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
     }
 }

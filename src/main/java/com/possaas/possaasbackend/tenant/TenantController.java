@@ -78,4 +78,11 @@ public class TenantController {
         String message = active ? "Tenant activated successfully" : "Tenant deactivated successfully";
         return ResponseEntity.ok(ApiResponse.success(message, TenantResponse.fromEntity(tenant)));
     }
+
+    // Delete a tenant (soft delete)
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<TenantResponse>> deleteTenant(@PathVariable UUID id) {
+        Tenant tenant = tenantService.deleteTenant(id);
+        return ResponseEntity.ok(ApiResponse.success("Tenant deleted successfully", TenantResponse.fromEntity(tenant)));
+    }
 }

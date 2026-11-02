@@ -162,4 +162,12 @@ public class TenantService {
 
         return tenantRepository.save(tenant);
     }
+
+    // Delete a tenant (soft delete: set active status to false)
+    public Tenant deleteTenant(UUID id) {
+        Tenant tenant = getTenantById(id);
+        tenant.setActive(false);
+
+        return tenantRepository.save(tenant);
+    }
 }
