@@ -20,7 +20,7 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/tenants/**","/api/businesses/**","/api/businesses/*/users/**").permitAll()
+                        .requestMatchers("/api/tenants/**","/api/businesses/**","/api/businesses/*/users/**","/api/permissions/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .httpBasic(Customizer.withDefaults());
