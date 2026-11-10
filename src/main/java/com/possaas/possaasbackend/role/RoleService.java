@@ -47,11 +47,13 @@ public class RoleService {
     }
 
     // Create a role
-    public RoleResponse createRole(UUID businessId, CreateRoleRequest request) {
+    public RoleResponse createRole(
+            UUID tenantId,
+            UUID businessId,
+            CreateRoleRequest request
+    ) {
 
-        Business business = businessRepository.findById(businessId)
-                .orElseThrow(() ->
-                        new RuntimeException("Business not found"));
+        Business business = getBusinessByTenant(tenantId, businessId);
 
         if (!business.isActive()) {
             throw new RuntimeException(
@@ -81,13 +83,12 @@ public class RoleService {
     // Get all roles belonging to a business
     @Transactional(readOnly = true)
     public Page<RoleResponse> getRolesByBusiness(
+            UUID tenantId,
             UUID businessId,
             Pageable pageable
     ) {
 
-        if (!businessRepository.existsById(businessId)) {
-            throw new RuntimeException("Business not found");
-        }
+        getBusinessByTenant(tenantId, businessId);
 
         return roleRepository.findAllByBusiness_Id(businessId, pageable)
                 .map(RoleResponse::fromEntity);
@@ -95,7 +96,13 @@ public class RoleService {
 
     // Get a specific role
     @Transactional(readOnly = true)
-    public RoleResponse getRoleById(UUID businessId, UUID roleId) {
+    public RoleResponse getRoleById(
+            UUID tenantId,
+            UUID businessId,
+            UUID roleId
+    ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleOrThrow(businessId, roleId);
 
@@ -104,10 +111,13 @@ public class RoleService {
 
     // Update role details
     public RoleResponse updateRole(
+            UUID tenantId,
             UUID businessId,
             UUID roleId,
             UpdateRoleRequest request
     ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleOrThrow(businessId, roleId);
 
@@ -132,10 +142,13 @@ public class RoleService {
 
     // Activate or deactivate a role
     public RoleResponse updateRoleStatus(
+            UUID tenantId,
             UUID businessId,
             UUID roleId,
             boolean active
     ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleOrThrow(businessId, roleId);
 
@@ -153,7 +166,13 @@ public class RoleService {
     }
 
     // Soft delete a role
-    public void deleteRole(UUID businessId, UUID roleId) {
+    public void deleteRole(
+            UUID tenantId,
+            UUID businessId,
+            UUID roleId
+    ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleOrThrow(businessId, roleId);
 
@@ -168,10 +187,13 @@ public class RoleService {
 
     // Assign or replace permissions belonging to a role
     public List<PermissionResponse> assignPermissions(
+            UUID tenantId,
             UUID businessId,
             UUID roleId,
             RolePermissionRequest request
     ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleWithPermissionsOrThrow(businessId, roleId);
 
@@ -191,7 +213,6 @@ public class RoleService {
             );
         }
 
-        // Replace the role's existing permissions
         role.setPermissions(new HashSet<>(permissions));
 
         Role updatedRole = roleRepository.save(role);
@@ -205,9 +226,12 @@ public class RoleService {
     // Get all permissions assigned to a role
     @Transactional(readOnly = true)
     public List<PermissionResponse> getRolePermissions(
+            UUID tenantId,
             UUID businessId,
             UUID roleId
     ) {
+
+        getBusinessByTenant(tenantId, businessId);
 
         Role role = getRoleWithPermissionsOrThrow(businessId, roleId);
 
@@ -215,6 +239,19 @@ public class RoleService {
                 .stream()
                 .map(PermissionResponse::fromEntity)
                 .toList();
+    }
+
+    // Verify that the business belongs to the supplied tenant
+    private Business getBusinessByTenant(
+            UUID tenantId,
+            UUID businessId
+    ) {
+
+        return businessRepository.findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Business not found for this tenant"
+                        ));
     }
 
     // Find role within the specified business
