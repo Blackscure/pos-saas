@@ -42,13 +42,16 @@ class UserServiceTest {
     @InjectMocks
     private UserService userService;
 
+    private UUID tenantId;
     private UUID businessId;
     private UUID userId;
+
     private Business business;
     private User user;
 
     @BeforeEach
     void setUp() {
+        tenantId = UUID.randomUUID();
         businessId = UUID.randomUUID();
         userId = UUID.randomUUID();
 
@@ -78,7 +81,7 @@ class UserServiceTest {
                 "password123"
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
                 .thenReturn(Optional.of(business));
 
         when(userRepository.existsByBusiness_IdAndEmail(
@@ -91,7 +94,7 @@ class UserServiceTest {
         when(userRepository.save(any(User.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.createUser(businessId, request);
+        User result = userService.createUser(tenantId, businessId, request);
 
         assertNotNull(result);
         assertEquals("John", result.getFirstName());
@@ -99,11 +102,13 @@ class UserServiceTest {
         assertEquals("hashed-password", result.getPassword());
         assertTrue(result.isActive());
 
+        verify(businessRepository)
+                .findByIdAndTenantId(businessId, tenantId);
         verify(passwordEncoder).encode("password123");
         verify(userRepository).save(any(User.class));
     }
 
-    // 2. Reject creation when business does not exist
+    // 2. Reject creation when business does not exist in tenant
     @Test
     void shouldRejectUserCreationWhenBusinessDoesNotExist() {
 
@@ -112,11 +117,11 @@ class UserServiceTest {
                 null, "password123"
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
                 .thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class,
-                () -> userService.createUser(businessId, request));
+                () -> userService.createUser(tenantId, businessId, request));
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -132,11 +137,11 @@ class UserServiceTest {
                 null, "password123"
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
                 .thenReturn(Optional.of(business));
 
         assertThrows(RuntimeException.class,
-                () -> userService.createUser(businessId, request));
+                () -> userService.createUser(tenantId, businessId, request));
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -152,7 +157,7 @@ class UserServiceTest {
                 null, "password123"
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
                 .thenReturn(Optional.of(business));
 
         when(userRepository.existsByBusiness_IdAndEmail(
@@ -160,7 +165,7 @@ class UserServiceTest {
                 .thenReturn(true);
 
         assertThrows(RuntimeException.class,
-                () -> userService.createUser(businessId, request));
+                () -> userService.createUser(tenantId, businessId, request));
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -176,7 +181,7 @@ class UserServiceTest {
                 null, "password123"
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
                 .thenReturn(Optional.of(business));
 
         when(userRepository.existsByBusiness_IdAndEmail(
@@ -189,7 +194,7 @@ class UserServiceTest {
         when(userRepository.save(any(User.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.createUser(businessId, request);
+        User result = userService.createUser(tenantId, businessId, request);
 
         assertEquals("john@example.com", result.getEmail());
     }
@@ -201,29 +206,34 @@ class UserServiceTest {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<User> expectedPage = new PageImpl<>(List.of(user));
 
-        when(businessRepository.existsById(businessId))
-                .thenReturn(true);
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
 
         when(userRepository.findAllByBusiness_Id(businessId, pageable))
                 .thenReturn(expectedPage);
 
-        Page<User> result =
-                userService.getUsersByBusiness(businessId, pageable);
+        Page<User> result = userService.getUsersByBusiness(
+                tenantId, businessId, pageable
+        );
 
         assertEquals(1, result.getTotalElements());
+
+        verify(businessRepository)
+                .findByIdAndTenantId(businessId, tenantId);
         verify(userRepository).findAllByBusiness_Id(businessId, pageable);
     }
 
-    // 7. Reject retrieval for a nonexistent business
+    // 7. Reject retrieval for a business outside the tenant
     @Test
-    void shouldRejectGettingUsersWhenBusinessDoesNotExist() {
+    void shouldRejectGettingUsersWhenBusinessDoesNotExistInTenant() {
 
-        when(businessRepository.existsById(businessId))
-                .thenReturn(false);
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class,
                 () -> userService.getUsersByBusiness(
-                        businessId, PageRequest.of(0, 10)));
+                        tenantId, businessId, PageRequest.of(0, 10)
+                ));
 
         verify(userRepository, never())
                 .findAllByBusiness_Id(any(), any());
@@ -233,10 +243,15 @@ class UserServiceTest {
     @Test
     void shouldGetUserById() {
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.of(user));
 
-        User result = userService.getUserById(businessId, userId);
+        User result = userService.getUserById(
+                tenantId, businessId, userId
+        );
 
         assertNotNull(result);
         assertEquals("john@example.com", result.getEmail());
@@ -246,11 +261,16 @@ class UserServiceTest {
     @Test
     void shouldRejectGettingUserOutsideBusiness() {
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class,
-                () -> userService.getUserById(businessId, userId));
+                () -> userService.getUserById(
+                        tenantId, businessId, userId
+                ));
     }
 
     // 10. Successfully update user information
@@ -264,6 +284,9 @@ class UserServiceTest {
                 "+254700000000"
         );
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.of(user));
 
@@ -274,7 +297,9 @@ class UserServiceTest {
         when(userRepository.save(any(User.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        User result = userService.updateUser(businessId, userId, request);
+        User result = userService.updateUser(
+                tenantId, businessId, userId, request
+        );
 
         assertEquals("Jane", result.getFirstName());
         assertEquals("jane@example.com", result.getEmail());
@@ -294,6 +319,9 @@ class UserServiceTest {
                 null
         );
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.of(user));
 
@@ -302,7 +330,9 @@ class UserServiceTest {
                 .thenReturn(true);
 
         assertThrows(RuntimeException.class,
-                () -> userService.updateUser(businessId, userId, request));
+                () -> userService.updateUser(
+                        tenantId, businessId, userId, request
+                ));
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -311,6 +341,9 @@ class UserServiceTest {
     @Test
     void shouldDeactivateUserSuccessfully() {
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.of(user));
 
@@ -318,7 +351,7 @@ class UserServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         User result = userService.updateUserStatus(
-                businessId, userId, false
+                tenantId, businessId, userId, false
         );
 
         assertFalse(result.isActive());
@@ -328,16 +361,40 @@ class UserServiceTest {
     @Test
     void shouldSoftDeleteUserSuccessfully() {
 
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(business));
+
         when(userRepository.findByIdAndBusiness_Id(userId, businessId))
                 .thenReturn(Optional.of(user));
 
         when(userRepository.save(any(User.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        userService.deleteUser(businessId, userId);
+        userService.deleteUser(tenantId, businessId, userId);
 
         assertFalse(user.isActive());
 
         verify(userRepository).save(user);
+    }
+
+    // 14. Reject access when business belongs to another tenant
+    @Test
+    void shouldRejectAccessWhenBusinessBelongsToAnotherTenant() {
+
+        UUID anotherTenantId = UUID.randomUUID();
+
+        when(businessRepository.findByIdAndTenantId(
+                businessId, anotherTenantId
+        )).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class,
+                () -> userService.getUsersByBusiness(
+                        anotherTenantId,
+                        businessId,
+                        PageRequest.of(0, 10)
+                ));
+
+        verify(userRepository, never())
+                .findAllByBusiness_Id(any(), any());
     }
 }

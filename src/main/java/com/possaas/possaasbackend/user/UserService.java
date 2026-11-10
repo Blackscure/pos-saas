@@ -1,3 +1,4 @@
+
 package com.possaas.possaasbackend.user;
 
 import com.possaas.possaasbackend.business.Business;
@@ -31,21 +32,26 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // Create a user
-    public User createUser(UUID businessId, CreateUserRequest request) {
-
-        Business business = businessRepository.findById(businessId)
-                .orElseThrow(() ->
-                        new RuntimeException("Business not found"));
+    // Create a user within a business belonging to the authenticated tenant
+    public User createUser(
+            UUID tenantId,
+            UUID businessId,
+            CreateUserRequest request
+    ) {
+        Business business = getBusinessByTenant(tenantId, businessId);
 
         if (!business.isActive()) {
-            throw new RuntimeException("Cannot create users under an inactive business");
+            throw new RuntimeException(
+                    "Cannot create users under an inactive business"
+            );
         }
 
         String email = normalizeEmail(request.email());
 
         if (userRepository.existsByBusiness_IdAndEmail(businessId, email)) {
-            throw new RuntimeException("Email already exists in this business");
+            throw new RuntimeException(
+                    "Email already exists in this business"
+            );
         }
 
         User user = new User();
@@ -64,34 +70,42 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    // Get all users belonging to a business
+    // Get all users belonging to a business within the authenticated tenant
     @Transactional(readOnly = true)
-    public Page<User> getUsersByBusiness(UUID businessId, Pageable pageable) {
-
-        if (!businessRepository.existsById(businessId)) {
-            throw new RuntimeException("Business not found");
-        }
+    public Page<User> getUsersByBusiness(
+            UUID tenantId,
+            UUID businessId,
+            Pageable pageable
+    ) {
+        getBusinessByTenant(tenantId, businessId);
 
         return userRepository.findAllByBusiness_Id(businessId, pageable);
     }
 
-    // Get one user belonging to a business
+    // Get one user belonging to a business within the authenticated tenant
     @Transactional(readOnly = true)
-    public User getUserById(UUID businessId, UUID userId) {
+    public User getUserById(
+            UUID tenantId,
+            UUID businessId,
+            UUID userId
+    ) {
+        getBusinessByTenant(tenantId, businessId);
 
         return userRepository.findByIdAndBusiness_Id(userId, businessId)
                 .orElseThrow(() ->
-                        new RuntimeException("User not found in this business"));
+                        new RuntimeException(
+                                "User not found in this business"
+                        ));
     }
 
     // Update user information
     public User updateUser(
+            UUID tenantId,
             UUID businessId,
             UUID userId,
             UpdateUserRequest request
     ) {
-
-        User user = getUserById(businessId, userId);
+        User user = getUserById(tenantId, businessId, userId);
 
         String email = normalizeEmail(request.email());
 
@@ -99,7 +113,9 @@ public class UserService {
                 .existsByBusiness_IdAndEmail(businessId, email);
 
         if (emailExists && !user.getEmail().equals(email)) {
-            throw new RuntimeException("Email already exists in this business");
+            throw new RuntimeException(
+                    "Email already exists in this business"
+            );
         }
 
         user.setFirstName(request.firstName().trim());
@@ -112,12 +128,12 @@ public class UserService {
 
     // Activate or deactivate a user
     public User updateUserStatus(
+            UUID tenantId,
             UUID businessId,
             UUID userId,
             boolean active
     ) {
-
-        User user = getUserById(businessId, userId);
+        User user = getUserById(tenantId, businessId, userId);
 
         user.setActive(active);
 
@@ -125,13 +141,28 @@ public class UserService {
     }
 
     // Soft-delete a user
-    public void deleteUser(UUID businessId, UUID userId) {
-
-        User user = getUserById(businessId, userId);
+    public void deleteUser(
+            UUID tenantId,
+            UUID businessId,
+            UUID userId
+    ) {
+        User user = getUserById(tenantId, businessId, userId);
 
         user.setActive(false);
 
         userRepository.save(user);
+    }
+
+    // Verify that the business belongs to the authenticated tenant
+    private Business getBusinessByTenant(
+            UUID tenantId,
+            UUID businessId
+    ) {
+        return businessRepository.findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Business not found in this tenant"
+                        ));
     }
 
     private String normalizeEmail(String email) {

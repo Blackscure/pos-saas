@@ -1,8 +1,10 @@
+
 package com.possaas.possaasbackend.user;
 
 import com.possaas.possaasbackend.common.pagination.PageResponse;
 import com.possaas.possaasbackend.common.pagination.PaginationUtils;
 import com.possaas.possaasbackend.common.response.ApiResponse;
+import com.possaas.possaasbackend.security.AuthenticatedUser;
 import com.possaas.possaasbackend.user.dto.CreateUserRequest;
 import com.possaas.possaasbackend.user.dto.UpdateUserRequest;
 import com.possaas.possaasbackend.user.dto.UserResponse;
@@ -13,6 +15,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,11 +34,17 @@ public class UserController {
 
     // Create user
     @PostMapping
+    @PreAuthorize("hasAuthority('USER_CREATE') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(
             @PathVariable UUID businessId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @Valid @RequestBody CreateUserRequest request
     ) {
-        User user = userService.createUser(businessId, request);
+        User user = userService.createUser(
+                authenticatedUser.tenantId(),
+                businessId,
+                request
+        );
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
@@ -45,8 +55,10 @@ public class UserController {
 
     // Get all users with pagination
     @GetMapping
+    @PreAuthorize("hasAuthority('USER_VIEW') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
             @PathVariable UUID businessId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_NUMBER) int page,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_SIZE) int size,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_SORT_BY) String sortBy,
@@ -57,7 +69,9 @@ public class UserController {
         );
 
         Page<User> userPage = userService.getUsersByBusiness(
-                businessId, pageable
+                authenticatedUser.tenantId(),
+                businessId,
+                pageable
         );
 
         List<UserResponse> users = userPage.getContent()
@@ -75,11 +89,17 @@ public class UserController {
 
     // Get user by ID
     @GetMapping("/{userId}")
+    @PreAuthorize("hasAuthority('USER_VIEW') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(
             @PathVariable UUID businessId,
-            @PathVariable UUID userId
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser
     ) {
-        User user = userService.getUserById(businessId, userId);
+        User user = userService.getUserById(
+                authenticatedUser.tenantId(),
+                businessId,
+                userId
+        );
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -91,12 +111,19 @@ public class UserController {
 
     // Update user
     @PutMapping("/{userId}")
+    @PreAuthorize("hasAuthority('USER_UPDATE') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable UUID businessId,
             @PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @Valid @RequestBody UpdateUserRequest request
     ) {
-        User user = userService.updateUser(businessId, userId, request);
+        User user = userService.updateUser(
+                authenticatedUser.tenantId(),
+                businessId,
+                userId,
+                request
+        );
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -108,13 +135,18 @@ public class UserController {
 
     // Activate or deactivate user
     @PatchMapping("/{userId}/status")
+    @PreAuthorize("hasAuthority('USER_DEACTIVATE') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<UserResponse>> updateUserStatus(
             @PathVariable UUID businessId,
             @PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
             @RequestParam boolean active
     ) {
         User user = userService.updateUserStatus(
-                businessId, userId, active
+                authenticatedUser.tenantId(),
+                businessId,
+                userId,
+                active
         );
 
         return ResponseEntity.ok(
@@ -127,11 +159,17 @@ public class UserController {
 
     // Soft-delete user
     @DeleteMapping("/{userId}")
+    @PreAuthorize("hasAuthority('USER_DEACTIVATE') and #businessId == authentication.principal.businessId")
     public ResponseEntity<ApiResponse<Void>> deleteUser(
             @PathVariable UUID businessId,
-            @PathVariable UUID userId
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser
     ) {
-        userService.deleteUser(businessId, userId);
+        userService.deleteUser(
+                authenticatedUser.tenantId(),
+                businessId,
+                userId
+        );
 
         return ResponseEntity.ok(
                 ApiResponse.success("User deleted successfully", null)

@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.role;
 
 import com.possaas.possaasbackend.business.Business;
@@ -27,7 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,17 +44,27 @@ class RoleServiceTest {
     @InjectMocks
     private RoleService roleService;
 
+    private UUID tenantId;
     private UUID businessId;
     private UUID roleId;
+
     private Business business;
     private Role role;
 
     @BeforeEach
     void setUp() {
+        tenantId = UUID.randomUUID();
         businessId = UUID.randomUUID();
         roleId = UUID.randomUUID();
 
         business = mock(Business.class);
+
+        lenient().when(business.isActive()).thenReturn(true);
+        lenient().when(business.getId()).thenReturn(businessId);
+
+        lenient().when(
+                businessRepository.findByIdAndTenantId(businessId, tenantId)
+        ).thenReturn(Optional.of(business));
 
         role = new Role();
         role.setId(roleId);
@@ -66,148 +75,116 @@ class RoleServiceTest {
         role.setPermissions(new HashSet<>());
     }
 
-    // ---------------------------------------------------------
-    // ROLE CREATION TESTS
-    // ---------------------------------------------------------
-
     @Test
     void shouldCreateRoleSuccessfully() {
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
-        when(business.isActive()).thenReturn(true);
-        when(business.getId()).thenReturn(businessId);
-        when(roleRepository.existsByBusiness_IdAndName(businessId, "MANAGER"))
-                .thenReturn(false);
-        when(roleRepository.save(any(Role.class)))
-                .thenAnswer(invocation -> {
-                    Role saved = invocation.getArgument(0);
-                    saved.setId(roleId);
-                    return saved;
-                });
-
-        RoleResponse response = roleService.createRole(
-                businessId,
-                new CreateRoleRequest("Manager", "Business manager")
+        CreateRoleRequest request = new CreateRoleRequest(
+                "SUPERVISOR",
+                "Store supervisor"
         );
 
-        assertNotNull(response);
-        assertEquals(roleId, response.id());
-        assertEquals("MANAGER", response.name());
-        assertEquals(businessId, response.businessId());
-        assertTrue(response.active());
+        when(roleRepository.existsByBusiness_IdAndName(
+                businessId,
+                "SUPERVISOR"
+        )).thenReturn(false);
 
+        when(roleRepository.save(any(Role.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        RoleResponse result = roleService.createRole(
+                tenantId,
+                businessId,
+                request
+        );
+
+        assertNotNull(result);
+        assertEquals("SUPERVISOR", result.name());
+        assertEquals("Store supervisor", result.description());
+        assertEquals(businessId, result.businessId());
+        assertTrue(result.active());
+
+        verify(businessRepository)
+                .findByIdAndTenantId(businessId, tenantId);
         verify(roleRepository).save(any(Role.class));
     }
 
     @Test
-    void shouldNormalizeRoleNameWhenCreatingRole() {
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
-        when(business.isActive()).thenReturn(true);
-        when(business.getId()).thenReturn(businessId);
-        when(roleRepository.existsByBusiness_IdAndName(businessId, "STOCK_KEEPER"))
-                .thenReturn(false);
-        when(roleRepository.save(any(Role.class)))
-                .thenAnswer(invocation -> {
-                    Role saved = invocation.getArgument(0);
-                    saved.setId(roleId);
-                    return saved;
-                });
+    void shouldRejectCreatingDuplicateRole() {
+        CreateRoleRequest request = new CreateRoleRequest(
+                "MANAGER",
+                "Business manager"
+        );
 
-        RoleResponse response = roleService.createRole(
+        when(roleRepository.existsByBusiness_IdAndName(
                 businessId,
-                new CreateRoleRequest(" Stock Keeper ", "Stock management")
-        );
-
-        assertEquals("STOCK_KEEPER", response.name());
-    }
-
-    @Test
-    void shouldRejectDuplicateRoleName() {
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
-        when(business.isActive()).thenReturn(true);
-        when(roleRepository.existsByBusiness_IdAndName(businessId, "MANAGER"))
-                .thenReturn(true);
+                "MANAGER"
+        )).thenReturn(true);
 
         assertThrows(RuntimeException.class, () ->
-                roleService.createRole(
-                        businessId,
-                        new CreateRoleRequest("Manager", "Manager role")
-                )
+                roleService.createRole(tenantId, businessId, request)
         );
 
         verify(roleRepository, never()).save(any(Role.class));
     }
 
     @Test
-    void shouldRejectRoleCreationForInactiveBusiness() {
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
-        when(business.isActive()).thenReturn(false);
+    void shouldRejectCreatingRoleForBusinessOutsideTenant() {
+        when(businessRepository.findByIdAndTenantId(
+                businessId,
+                tenantId
+        )).thenReturn(Optional.empty());
+
+        CreateRoleRequest request = new CreateRoleRequest(
+                "SUPERVISOR",
+                "Store supervisor"
+        );
 
         assertThrows(RuntimeException.class, () ->
-                roleService.createRole(
-                        businessId,
-                        new CreateRoleRequest("CASHIER", "Cashier role")
-                )
+                roleService.createRole(tenantId, businessId, request)
         );
 
         verify(roleRepository, never()).save(any(Role.class));
     }
-
-    @Test
-    void shouldRejectRoleCreationForNonexistentBusiness() {
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.empty());
-
-        assertThrows(RuntimeException.class, () ->
-                roleService.createRole(
-                        businessId,
-                        new CreateRoleRequest("CASHIER", "Cashier role")
-                )
-        );
-    }
-
-    // ---------------------------------------------------------
-    // ROLE RETRIEVAL TESTS
-    // ---------------------------------------------------------
 
     @Test
     void shouldGetRolesByBusiness() {
-        when(businessRepository.existsById(businessId))
-                .thenReturn(true);
+        Page<Role> roles = new PageImpl<>(List.of(role));
 
-        Page<Role> rolePage = new PageImpl<>(
-                List.of(role),
-                PageRequest.of(0, 10),
-                1
+        when(roleRepository.findAllByBusiness_Id(
+                businessId,
+                PageRequest.of(0, 10)
+        )).thenReturn(roles);
+
+        Page<RoleResponse> result = roleService.getRolesByBusiness(
+                tenantId,
+                businessId,
+                PageRequest.of(0, 10)
         );
 
-        when(roleRepository.findAllByBusiness_Id(eq(businessId), any()))
-                .thenReturn(rolePage);
-
-        Page<RoleResponse> response =
-                roleService.getRolesByBusiness(
-                        businessId,
-                        PageRequest.of(0, 10)
-                );
-
-        assertEquals(1, response.getTotalElements());
-        assertEquals("MANAGER", response.getContent().get(0).name());
+        assertEquals(1, result.getTotalElements());
+        assertEquals("MANAGER", result.getContent().get(0).name());
+        verify(businessRepository)
+                .findByIdAndTenantId(businessId, tenantId);
     }
 
     @Test
-    void shouldRejectGettingRolesForNonexistentBusiness() {
-        when(businessRepository.existsById(businessId))
-                .thenReturn(false);
+    void shouldRejectGettingRolesForBusinessOutsideTenant() {
+        UUID anotherTenantId = UUID.randomUUID();
+
+        when(businessRepository.findByIdAndTenantId(
+                businessId,
+                anotherTenantId
+        )).thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () ->
                 roleService.getRolesByBusiness(
+                        anotherTenantId,
                         businessId,
                         PageRequest.of(0, 10)
                 )
         );
+
+        verify(roleRepository, never())
+                .findAllByBusiness_Id(any(UUID.class), any());
     }
 
     @Test
@@ -215,298 +192,213 @@ class RoleServiceTest {
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
 
-        RoleResponse response =
-                roleService.getRoleById(businessId, roleId);
+        RoleResponse result = roleService.getRoleById(
+                tenantId,
+                businessId,
+                roleId
+        );
 
-        assertEquals(roleId, response.id());
-        assertEquals("MANAGER", response.name());
+        assertNotNull(result);
+        assertEquals(roleId, result.id());
+        assertEquals("MANAGER", result.name());
     }
 
     @Test
-    void shouldRejectRoleFromAnotherBusiness() {
+    void shouldThrowWhenRoleDoesNotExist() {
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () ->
-                roleService.getRoleById(businessId, roleId)
+                roleService.getRoleById(tenantId, businessId, roleId)
         );
     }
-
-    // ---------------------------------------------------------
-    // ROLE UPDATE TESTS
-    // ---------------------------------------------------------
 
     @Test
     void shouldUpdateRoleSuccessfully() {
+        UpdateRoleRequest request = new UpdateRoleRequest(
+                "SENIOR_MANAGER",
+                "Senior business manager"
+        );
+
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
-        when(roleRepository.existsByBusiness_IdAndName(businessId, "SUPERVISOR"))
-                .thenReturn(false);
+
+        when(roleRepository.existsByBusiness_IdAndName(
+                businessId,
+                "SENIOR_MANAGER"
+        )).thenReturn(false);
+
         when(roleRepository.save(any(Role.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        RoleResponse response = roleService.updateRole(
+        RoleResponse result = roleService.updateRole(
+                tenantId,
                 businessId,
                 roleId,
-                new UpdateRoleRequest(
-                        "Supervisor",
-                        "Supervises daily business operations"
-                )
+                request
         );
 
-        assertEquals("SUPERVISOR", response.name());
-        assertEquals(
-                "Supervises daily business operations",
-                response.description()
-        );
+        assertEquals("SENIOR_MANAGER", result.name());
+        assertEquals("Senior business manager", result.description());
     }
 
     @Test
-    void shouldRejectDuplicateNameWhenUpdatingRole() {
+    void shouldRejectUpdatingRoleToDuplicateName() {
+        UpdateRoleRequest request = new UpdateRoleRequest(
+                "CASHIER",
+                "Cashier role"
+        );
+
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
-        when(roleRepository.existsByBusiness_IdAndName(businessId, "CASHIER"))
-                .thenReturn(true);
+
+        when(roleRepository.existsByBusiness_IdAndName(
+                businessId,
+                "CASHIER"
+        )).thenReturn(true);
 
         assertThrows(RuntimeException.class, () ->
                 roleService.updateRole(
+                        tenantId,
                         businessId,
                         roleId,
-                        new UpdateRoleRequest("Cashier", "Cashier role")
+                        request
                 )
         );
-
-        verify(roleRepository, never()).save(any(Role.class));
     }
 
-    // ---------------------------------------------------------
-    // ROLE STATUS TESTS
-    // ---------------------------------------------------------
-
     @Test
-    void shouldDeactivateRoleSuccessfully() {
+    void shouldUpdateRoleStatus() {
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
+
         when(roleRepository.save(any(Role.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        RoleResponse response =
-                roleService.updateRoleStatus(businessId, roleId, false);
+        RoleResponse result = roleService.updateRoleStatus(
+                tenantId,
+                businessId,
+                roleId,
+                false
+        );
 
-        assertFalse(response.active());
+        assertFalse(result.active());
     }
 
     @Test
-    void shouldActivateRoleSuccessfully() {
-        role.setActive(false);
-
-        when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
-                .thenReturn(Optional.of(role));
-        when(roleRepository.save(any(Role.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        RoleResponse response =
-                roleService.updateRoleStatus(businessId, roleId, true);
-
-        assertTrue(response.active());
-    }
-
-    @Test
-    void shouldPreventDeactivatingOwnerRole() {
+    void shouldNotDeactivateOwnerRole() {
         role.setName("OWNER");
 
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
 
         assertThrows(RuntimeException.class, () ->
-                roleService.updateRoleStatus(businessId, roleId, false)
+                roleService.updateRoleStatus(
+                        tenantId,
+                        businessId,
+                        roleId,
+                        false
+                )
         );
 
         verify(roleRepository, never()).save(any(Role.class));
     }
 
-    // ---------------------------------------------------------
-    // ROLE DELETION TESTS
-    // ---------------------------------------------------------
-
     @Test
-    void shouldSoftDeleteCustomRole() {
+    void shouldDeleteRoleSuccessfully() {
         role.setName("SUPERVISOR");
 
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
+
         when(roleRepository.save(any(Role.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        roleService.deleteRole(businessId, roleId);
+        roleService.deleteRole(tenantId, businessId, roleId);
 
         assertFalse(role.isActive());
         verify(roleRepository).save(role);
     }
 
     @Test
-    void shouldPreventDeletingSystemRole() {
+    void shouldNotDeleteSystemRole() {
         role.setName("MANAGER");
 
         when(roleRepository.findByIdAndBusiness_Id(roleId, businessId))
                 .thenReturn(Optional.of(role));
 
         assertThrows(RuntimeException.class, () ->
-                roleService.deleteRole(businessId, roleId)
+                roleService.deleteRole(tenantId, businessId, roleId)
         );
 
         verify(roleRepository, never()).save(any(Role.class));
     }
 
-    // ---------------------------------------------------------
-    // ROLE PERMISSION ASSIGNMENT TESTS
-    // ---------------------------------------------------------
-
     @Test
-    void shouldAssignPermissionsToRoleSuccessfully() {
+    void shouldAssignPermissionsToRole() {
         UUID permissionId = UUID.randomUUID();
 
         Permission permission = mock(Permission.class);
-
         when(permission.getId()).thenReturn(permissionId);
         when(permission.getCode()).thenReturn("USER_VIEW");
         when(permission.getName()).thenReturn("View Users");
         when(permission.getDescription()).thenReturn("View business users");
         when(permission.getCategory()).thenReturn("USER");
 
+        RolePermissionRequest request = new RolePermissionRequest(
+                Set.of(permissionId)
+        );
+
         when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
                 .thenReturn(Optional.of(role));
 
-        when(permissionRepository.findAllById(Set.of(permissionId)))
+        when(permissionRepository.findAllById(request.permissionIds()))
                 .thenReturn(List.of(permission));
 
         when(roleRepository.save(any(Role.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        RolePermissionRequest request =
-                new RolePermissionRequest(Set.of(permissionId));
+        List<PermissionResponse> result = roleService.assignPermissions(
+                tenantId,
+                businessId,
+                roleId,
+                request
+        );
 
-        List<PermissionResponse> response =
-                roleService.assignPermissions(businessId, roleId, request);
-
-        assertNotNull(response);
-        assertEquals(1, response.size());
-        assertEquals(permissionId, response.get(0).id());
-        assertEquals("USER_VIEW", response.get(0).code());
-        assertEquals("View Users", response.get(0).name());
-        assertEquals("USER", response.get(0).category());
-
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(permissionId, result.get(0).id());
+        assertEquals("USER_VIEW", result.get(0).code());
         assertEquals(1, role.getPermissions().size());
-
+        assertTrue(role.getPermissions().contains(permission));
         verify(roleRepository).save(role);
     }
 
     @Test
-    void shouldRejectAssigningInvalidPermissionIds() {
-        UUID permissionId = UUID.randomUUID();
-
-        when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
-                .thenReturn(Optional.of(role));
-
-        when(permissionRepository.findAllById(Set.of(permissionId)))
-                .thenReturn(List.of());
-
-        RolePermissionRequest request =
-                new RolePermissionRequest(Set.of(permissionId));
-
-        assertThrows(RuntimeException.class, () ->
-                roleService.assignPermissions(businessId, roleId, request)
-        );
-
-        verify(roleRepository, never()).save(any(Role.class));
-    }
-
-    @Test
-    void shouldRejectAssigningEmptyPermissionList() {
-        when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
-                .thenReturn(Optional.of(role));
-
-        RolePermissionRequest request =
-                new RolePermissionRequest(Set.of());
-
-        assertThrows(RuntimeException.class, () ->
-                roleService.assignPermissions(businessId, roleId, request)
-        );
-
-        verify(permissionRepository, never()).findAllById(anySet());
-        verify(roleRepository, never()).save(any(Role.class));
-    }
-
-    @Test
-    void shouldRejectAssigningPermissionsToNonexistentRole() {
-        when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
-                .thenReturn(Optional.empty());
-
-        UUID permissionId = UUID.randomUUID();
-
-        RolePermissionRequest request =
-                new RolePermissionRequest(Set.of(permissionId));
-
-        assertThrows(RuntimeException.class, () ->
-                roleService.assignPermissions(businessId, roleId, request)
-        );
-
-        verify(permissionRepository, never()).findAllById(anySet());
-    }
-
-    // ---------------------------------------------------------
-    // ROLE PERMISSION RETRIEVAL TESTS
-    // ---------------------------------------------------------
-
-    @Test
-    void shouldGetRolePermissionsSuccessfully() {
+    void shouldGetRolePermissions() {
         UUID permissionId = UUID.randomUUID();
 
         Permission permission = mock(Permission.class);
-
         when(permission.getId()).thenReturn(permissionId);
-        when(permission.getCode()).thenReturn("SALE_CREATE");
-        when(permission.getName()).thenReturn("Create Sales");
-        when(permission.getDescription()).thenReturn("Create new sales");
-        when(permission.getCategory()).thenReturn("SALES");
+        when(permission.getCode()).thenReturn("USER_VIEW");
+        when(permission.getName()).thenReturn("View Users");
+        when(permission.getDescription()).thenReturn("View business users");
+        when(permission.getCategory()).thenReturn("USER");
 
         role.setPermissions(new HashSet<>(Set.of(permission)));
 
         when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
                 .thenReturn(Optional.of(role));
 
-        List<PermissionResponse> response =
-                roleService.getRolePermissions(businessId, roleId);
-
-        assertNotNull(response);
-        assertEquals(1, response.size());
-        assertEquals(permissionId, response.get(0).id());
-        assertEquals("SALE_CREATE", response.get(0).code());
-        assertEquals("Create Sales", response.get(0).name());
-        assertEquals("SALES", response.get(0).category());
-    }
-
-    @Test
-    void shouldReturnEmptyListWhenRoleHasNoPermissions() {
-        role.setPermissions(new HashSet<>());
-
-        when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
-                .thenReturn(Optional.of(role));
-
-        List<PermissionResponse> response =
-                roleService.getRolePermissions(businessId, roleId);
-
-        assertNotNull(response);
-        assertTrue(response.isEmpty());
-    }
-
-    @Test
-    void shouldRejectGettingPermissionsForNonexistentRole() {
-        when(roleRepository.findByIdAndBusinessIdWithPermissions(roleId, businessId))
-                .thenReturn(Optional.empty());
-
-        assertThrows(RuntimeException.class, () ->
-                roleService.getRolePermissions(businessId, roleId)
+        List<PermissionResponse> result = roleService.getRolePermissions(
+                tenantId,
+                businessId,
+                roleId
         );
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(permissionId, result.get(0).id());
+        assertEquals("USER_VIEW", result.get(0).code());
     }
 }

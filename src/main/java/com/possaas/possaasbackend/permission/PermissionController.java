@@ -1,9 +1,10 @@
-
 package com.possaas.possaasbackend.permission;
 
 import com.possaas.possaasbackend.common.response.ApiResponse;
 import com.possaas.possaasbackend.permission.dto.PermissionResponse;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,10 +19,9 @@ public class PermissionController {
         this.permissionService = permissionService;
     }
 
-    /**
-     * Retrieve all permissions.
-     */
+    // Retrieve all permissions
     @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_VIEW')")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions() {
 
         List<PermissionResponse> permissions =
@@ -38,10 +38,9 @@ public class PermissionController {
         );
     }
 
-    /**
-     * Retrieve permissions by category.
-     */
+    // Retrieve permissions by category
     @GetMapping("/category/{category}")
+    @PreAuthorize("hasAuthority('ROLE_VIEW')")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissionsByCategory(
             @PathVariable String category
     ) {
@@ -60,10 +59,9 @@ public class PermissionController {
         );
     }
 
-    /**
-     * Retrieve a permission by its unique code.
-     */
+    // Retrieve a permission by its unique code
     @GetMapping("/code/{code}")
+    @PreAuthorize("hasAuthority('ROLE_VIEW')")
     public ResponseEntity<ApiResponse<PermissionResponse>> getPermissionByCode(
             @PathVariable String code
     ) {
