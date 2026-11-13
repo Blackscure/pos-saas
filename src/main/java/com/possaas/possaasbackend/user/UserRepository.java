@@ -2,6 +2,7 @@ package com.possaas.possaasbackend.user;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,6 +11,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
+
+    // Platform Admin: retrieve users across all businesses and tenants
+    @Override
+    @EntityGraph(attributePaths = {"business", "business.tenant"})
+    Page<User> findAll(Pageable pageable);
+
+    // Platform Admin: retrieve a user by ID across all businesses
+    @Override
+    @EntityGraph(attributePaths = {"business", "business.tenant"})
+    Optional<User> findById(UUID userId);
 
     // Get all users belonging to a specific business
     Page<User> findAllByBusiness_Id(UUID businessId, Pageable pageable);
