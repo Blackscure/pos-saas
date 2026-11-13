@@ -12,6 +12,9 @@ import java.util.UUID;
 @Service
 public class JwtService {
 
+    public static final String BUSINESS_USER = "BUSINESS_USER";
+    public static final String PLATFORM_ADMIN = "PLATFORM_ADMIN";
+
     private final SecretKey secretKey;
     private final long accessTokenExpiration;
 
@@ -40,6 +43,7 @@ public class JwtService {
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("businessId", businessId.toString())
+                .claim("accountType", BUSINESS_USER)
                 .issuedAt(issuedAt)
                 .expiration(expiration)
                 .signWith(secretKey)
@@ -47,23 +51,41 @@ public class JwtService {
     }
 
     /**
-     * Extract the user ID from a token.
+     * Generate an access token for a platform administrator.
      */
+    public String generatePlatformAdminAccessToken(
+            UUID adminId,
+            String email
+    ) {
+        Date issuedAt = new Date();
+        Date expiration = new Date(
+                issuedAt.getTime() + accessTokenExpiration
+        );
+
+        return Jwts.builder()
+                .subject(adminId.toString())
+                .claim("email", email)
+                .claim("accountType", PLATFORM_ADMIN)
+                .issuedAt(issuedAt)
+                .expiration(expiration)
+                .signWith(secretKey)
+                .compact();
+    }
+
     public UUID extractUserId(String token) {
         String subject = extractClaims(token).getSubject();
         return UUID.fromString(subject);
     }
 
-    /**
-     * Extract the email from a token.
-     */
+    public UUID extractPlatformAdminId(String token) {
+        String subject = extractClaims(token).getSubject();
+        return UUID.fromString(subject);
+    }
+
     public String extractEmail(String token) {
         return extractClaims(token).get("email", String.class);
     }
 
-    /**
-     * Extract the business ID from a token.
-     */
     public UUID extractBusinessId(String token) {
         String businessId = extractClaims(token)
                 .get("businessId", String.class);
@@ -71,9 +93,10 @@ public class JwtService {
         return UUID.fromString(businessId);
     }
 
-    /**
-     * Validate the token signature and expiration.
-     */
+    public String extractAccountType(String token) {
+        return extractClaims(token).get("accountType", String.class);
+    }
+
     public boolean isTokenValid(String token) {
         try {
             extractClaims(token);
@@ -83,9 +106,6 @@ public class JwtService {
         }
     }
 
-    /**
-     * Parse and verify JWT claims.
-     */
     private Claims extractClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
