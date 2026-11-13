@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.user;
 
 import com.possaas.possaasbackend.business.Business;
@@ -168,4 +167,32 @@ public class UserService {
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
+
+
+    // Platform Admin: retrieve users across all tenants
+    @Transactional(readOnly = true)
+    public Page<User> getAllUsers(Pageable pageable) {
+        return userRepository.findAll(pageable);
+    }
+
+    // Platform Admin: retrieve a user by ID
+    @Transactional(readOnly = true)
+    public User getPlatformUserById(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found")
+                );
+    }
+
+    // Platform Admin: activate or suspend a user
+    public User updatePlatformUserStatus(
+            UUID userId,
+            boolean active
+    ) {
+        User user = getPlatformUserById(userId);
+        user.setActive(active);
+
+        return userRepository.save(user);
+    }
+
 }

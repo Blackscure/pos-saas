@@ -7,7 +7,9 @@ import java.util.UUID;
 
 public record UserResponse(
         UUID id,
+        UUID tenantId,
         UUID businessId,
+        String businessName,
         String firstName,
         String lastName,
         String email,
@@ -20,7 +22,9 @@ public record UserResponse(
     public static UserResponse fromEntity(User user) {
         return new UserResponse(
                 user.getId(),
+                user.getBusiness().getTenant().getId(),
                 user.getBusiness().getId(),
+                user.getBusiness().getName(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
