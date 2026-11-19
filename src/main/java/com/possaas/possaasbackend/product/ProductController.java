@@ -56,22 +56,36 @@ public class ProductController {
     public ResponseEntity<ApiResponse<PageResponse<ProductResponse>>> getProducts(
             @PathVariable UUID businessId,
             @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String sku,
+            @RequestParam(required = false) String barcode,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_NUMBER) int page,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_PAGE_SIZE) int size,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_SORT_BY) String sortBy,
             @RequestParam(defaultValue = PaginationUtils.DEFAULT_SORT_DIRECTION) String sortDir
     ) {
 
+        String normalizedSortBy = normalizeSortBy(sortBy);
+
         Pageable pageable = PaginationUtils.createPageable(
                 page,
                 size,
-                sortBy,
+                normalizedSortBy,
                 sortDir
         );
 
         Page<Product> productPage = productService.getProducts(
                 authenticatedUser.tenantId(),
                 businessId,
+                search,
+                name,
+                sku,
+                barcode,
+                categoryId,
+                active,
                 pageable
         );
 
@@ -181,5 +195,20 @@ public class ProductController {
                         ProductResponse.fromEntity(product)
                 )
         );
+    }
+
+    private String normalizeSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return PaginationUtils.DEFAULT_SORT_BY;
+        }
+
+        return switch (sortBy.trim().toLowerCase()) {
+            case "name" -> "name";
+            case "sku" -> "sku";
+            case "price", "sellingprice" -> "sellingPrice";
+            case "purchaseprice" -> "purchasePrice";
+            case "createdat", "creationdate", "date" -> "createdAt";
+            default -> PaginationUtils.DEFAULT_SORT_BY;
+        };
     }
 }

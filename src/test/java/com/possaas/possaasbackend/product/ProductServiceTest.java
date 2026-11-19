@@ -12,13 +12,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,12 +64,17 @@ class ProductServiceTest {
         when(business.isActive()).thenReturn(true);
     }
 
+    // =========================================================================
+    // CREATE PRODUCT
+    // =========================================================================
+
     @Test
     void shouldCreateProductSuccessfully() {
 
         stubActiveBusiness();
 
         UUID categoryId = UUID.randomUUID();
+
         Category category = new Category();
         category.setActive(true);
 
@@ -137,6 +149,7 @@ class ProductServiceTest {
         );
 
         assertEquals("Category ID is required", exception.getMessage());
+
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -211,6 +224,7 @@ class ProductServiceTest {
         stubActiveBusiness();
 
         UUID categoryId = UUID.randomUUID();
+
         Category inactiveCategory = new Category();
         inactiveCategory.setActive(false);
 
@@ -239,7 +253,11 @@ class ProductServiceTest {
                 () -> productService.createProduct(tenantId, businessId, request)
         );
 
-        assertEquals("Cannot assign a product to an inactive category", exception.getMessage());
+        assertEquals(
+                "Cannot assign a product to an inactive category",
+                exception.getMessage()
+        );
+
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -269,6 +287,10 @@ class ProductServiceTest {
         verify(productRepository, never()).save(any(Product.class));
     }
 
+    // =========================================================================
+    // PRODUCT STATUS
+    // =========================================================================
+
     @Test
     void shouldDeactivateProductSuccessfully() {
 
@@ -292,6 +314,10 @@ class ProductServiceTest {
         verify(productRepository).save(product);
     }
 
+    // =========================================================================
+    // GET PRODUCT BY ID
+    // =========================================================================
+
     @Test
     void shouldRejectProductNotFound() {
 
@@ -306,5 +332,199 @@ class ProductServiceTest {
         );
 
         verify(productRepository, never()).save(any(Product.class));
+    }
+
+    // =========================================================================
+    // GET PRODUCTS (SEARCH, FILTER, PAGINATION)
+    // =========================================================================
+
+    @Test
+    void shouldGetProductsWithAllFilters() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+        UUID categoryId = UUID.randomUUID();
+
+        Product product = new Product();
+
+        Page<Product> expectedPage =
+                new PageImpl<>(List.of(product), pageable, 1);
+
+        when(productRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(expectedPage);
+
+        Page<Product> result = productService.getProducts(
+                tenantId,
+                businessId,
+                "  milk  ",
+                " Fresh Milk ",
+                " MILK-001 ",
+                " 616110000001 ",
+                categoryId,
+                true,
+                pageable
+        );
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertSame(product, result.getContent().get(0));
+
+        verify(productRepository).findAll(
+                any(Specification.class),
+                eq(pageable)
+        );
+    }
+
+    @Test
+    void shouldGetProductsWithoutFilters() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Page<Product> expectedPage =
+                new PageImpl<>(List.of(), pageable, 0);
+
+        when(productRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(expectedPage);
+
+        Page<Product> result = productService.getProducts(
+                tenantId,
+                businessId,
+                pageable
+        );
+
+        assertNotNull(result);
+        assertEquals(0, result.getTotalElements());
+
+        verify(productRepository).findAll(
+                any(Specification.class),
+                eq(pageable)
+        );
+    }
+
+    @Test
+    void shouldTreatBlankFilterTermsAsNull() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Page<Product> expectedPage =
+                new PageImpl<>(List.of(), pageable, 0);
+
+        when(productRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(expectedPage);
+
+        Page<Product> result = productService.getProducts(
+                tenantId,
+                businessId,
+                "   ",
+                "",
+                "   ",
+                "",
+                null,
+                null,
+                pageable
+        );
+
+        assertNotNull(result);
+
+        verify(productRepository).findAll(
+                any(Specification.class),
+                eq(pageable)
+        );
+    }
+
+    @Test
+    void shouldFilterProductsByCategory() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+        UUID categoryId = UUID.randomUUID();
+
+        Page<Product> expectedPage =
+                new PageImpl<>(List.of(new Product()), pageable, 1);
+
+        when(productRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(expectedPage);
+
+        Page<Product> result = productService.getProducts(
+                tenantId,
+                businessId,
+                null,
+                null,
+                null,
+                null,
+                categoryId,
+                null,
+                pageable
+        );
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+
+        verify(productRepository).findAll(
+                any(Specification.class),
+                eq(pageable)
+        );
+    }
+
+    @Test
+    void shouldFilterProductsByActiveStatus() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        Page<Product> expectedPage =
+                new PageImpl<>(List.of(), pageable, 0);
+
+        when(productRepository.findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        )).thenReturn(expectedPage);
+
+        Page<Product> result = productService.getProducts(
+                tenantId,
+                businessId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                pageable
+        );
+
+        assertNotNull(result);
+
+        verify(productRepository).findAll(
+                any(Specification.class),
+                eq(pageable)
+        );
+    }
+
+    @Test
+    void shouldThrowExceptionWhenBusinessNotFoundOnGetProducts() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.getProducts(
+                        tenantId,
+                        businessId,
+                        pageable
+                )
+        );
+
+        verify(productRepository, never()).findAll(
+                any(Specification.class),
+                any(Pageable.class)
+        );
     }
 }

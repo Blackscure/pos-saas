@@ -344,7 +344,7 @@ class ProductControllerTest {
     }
 
     // =========================================================================
-    // GET PRODUCTS
+    // GET PRODUCTS (SEARCH, FILTER, SORT, PAGINATE)
     // =========================================================================
 
     @Test
@@ -366,6 +366,12 @@ class ProductControllerTest {
         when(productService.getProducts(
                 eq(tenantId),
                 eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
                 any(Pageable.class)
         )).thenReturn(page);
 
@@ -380,7 +386,7 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.data.totalPages").value(1));
 
         verify(productService).getProducts(
-                eq(tenantId), eq(businessId), any(Pageable.class)
+                eq(tenantId), eq(businessId), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
         );
     }
 
@@ -395,6 +401,12 @@ class ProductControllerTest {
         when(productService.getProducts(
                 eq(tenantId),
                 eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
                 any(Pageable.class)
         )).thenReturn(emptyPage);
 
@@ -408,6 +420,231 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.data.pageNumber").value(2))
                 .andExpect(jsonPath("$.data.pageSize").value(5))
                 .andExpect(jsonPath("$.data.content.length()").value(0));
+    }
+
+    @Test
+    void getProducts_SearchByName_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                eq("milk"),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("name", "milk"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), isNull(), eq("milk"), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_SearchBySku_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                eq("MILK-001"),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("sku", "MILK-001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), isNull(), isNull(), eq("MILK-001"), isNull(), isNull(), isNull(), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_SearchByBarcode_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq("616110000001"),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("barcode", "616110000001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), isNull(), isNull(), isNull(), eq("616110000001"), isNull(), isNull(), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_FilterByCategory_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(categoryId),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("categoryId", categoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), isNull(), isNull(), isNull(), isNull(), eq(categoryId), isNull(), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_FilterByActiveStatus_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(true),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("active", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), isNull(), isNull(), isNull(), isNull(), isNull(), eq(true), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_GeneralSearch_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                eq("milk"),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("search", "milk"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(productService).getProducts(
+                eq(tenantId), eq(businessId), eq("milk"), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class)
+        );
+    }
+
+    @Test
+    void getProducts_SortByPrice_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("sortBy", "price")
+                        .param("sortDir", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getProducts_SortByCreationDate_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("sortBy", "creationDate")
+                        .param("sortDir", "desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getProducts_SortBySku_Success() throws Exception {
+        Page<Product> page = new PageImpl<>(List.of(), PageRequest.of(0, 10), 0);
+
+        when(productService.getProducts(
+                eq(tenantId),
+                eq(businessId),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(Pageable.class)
+        )).thenReturn(page);
+
+        mockMvc.perform(get("/api/businesses/" + businessId + "/products")
+                        .param("sortBy", "sku")
+                        .param("sortDir", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 
     // =========================================================================

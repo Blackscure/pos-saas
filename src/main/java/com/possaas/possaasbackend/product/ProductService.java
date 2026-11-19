@@ -1,3 +1,4 @@
+
 package com.possaas.possaasbackend.product;
 
 import com.possaas.possaasbackend.business.Business;
@@ -6,11 +7,16 @@ import com.possaas.possaasbackend.category.Category;
 import com.possaas.possaasbackend.category.CategoryRepository;
 import com.possaas.possaasbackend.product.dto.CreateProductRequest;
 import com.possaas.possaasbackend.product.dto.UpdateProductRequest;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -36,7 +42,6 @@ public class ProductService {
             UUID businessId,
             CreateProductRequest request
     ) {
-
         Business business = getBusinessByTenant(tenantId, businessId);
 
         validateBusinessIsActive(business);
@@ -76,13 +81,127 @@ public class ProductService {
     public Page<Product> getProducts(
             UUID tenantId,
             UUID businessId,
+            String search,
+            String name,
+            String sku,
+            String barcode,
+            UUID categoryId,
+            Boolean active,
             Pageable pageable
     ) {
-
         getBusinessByTenant(tenantId, businessId);
 
-        return productRepository.findAllByBusiness_Id(
+        String normalizedSearch = normalizeSearchTerm(search);
+        String normalizedName = normalizeSearchTerm(name);
+        String normalizedSku = normalizeSearchTerm(sku);
+        String normalizedBarcode = normalizeSearchTerm(barcode);
+
+        Specification<Product> specification = (root, query, criteriaBuilder) -> {
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Always restrict products to the requested business.
+            predicates.add(
+                    criteriaBuilder.equal(
+                            root.get("business").get("id"),
+                            businessId
+                    )
+            );
+
+            if (categoryId != null) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                root.get("category").get("id"),
+                                categoryId
+                        )
+                );
+            }
+
+            if (active != null) {
+                predicates.add(
+                        criteriaBuilder.equal(
+                                root.get("active"),
+                                active
+                        )
+                );
+            }
+
+            if (normalizedName != null) {
+                predicates.add(
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(root.get("name")),
+                                contains(normalizedName)
+                        )
+                );
+            }
+
+            if (normalizedSku != null) {
+                predicates.add(
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(root.get("sku")),
+                                contains(normalizedSku)
+                        )
+                );
+            }
+
+            if (normalizedBarcode != null) {
+                predicates.add(
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(root.get("barcode")),
+                                contains(normalizedBarcode)
+                        )
+                );
+            }
+
+            if (normalizedSearch != null) {
+                String searchPattern = contains(normalizedSearch);
+
+                predicates.add(
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(
+                                        criteriaBuilder.lower(root.get("name")),
+                                        searchPattern
+                                ),
+                                criteriaBuilder.like(
+                                        criteriaBuilder.lower(root.get("sku")),
+                                        searchPattern
+                                ),
+                                criteriaBuilder.and(
+                                        criteriaBuilder.isNotNull(
+                                                root.get("barcode")
+                                        ),
+                                        criteriaBuilder.like(
+                                                criteriaBuilder.lower(root.get("barcode")),
+                                                searchPattern
+                                        )
+                                )
+                        )
+                );
+            }
+
+            return criteriaBuilder.and(
+                    predicates.toArray(new Predicate[0])
+            );
+        };
+
+        return productRepository.findAll(specification, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Product> getProducts(
+            UUID tenantId,
+            UUID businessId,
+            Pageable pageable
+    ) {
+        return getProducts(
+                tenantId,
                 businessId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 pageable
         );
     }
@@ -93,7 +212,6 @@ public class ProductService {
             UUID businessId,
             UUID productId
     ) {
-
         getBusinessByTenant(tenantId, businessId);
 
         return productRepository.findByIdAndBusiness_Id(
@@ -110,7 +228,6 @@ public class ProductService {
             UUID productId,
             UpdateProductRequest request
     ) {
-
         Business business = getBusinessByTenant(tenantId, businessId);
 
         validateBusinessIsActive(business);
@@ -150,7 +267,6 @@ public class ProductService {
             UUID productId,
             boolean active
     ) {
-
         Business business = getBusinessByTenant(tenantId, businessId);
 
         validateBusinessIsActive(business);
@@ -171,7 +287,6 @@ public class ProductService {
             UUID businessId,
             UUID productId
     ) {
-
         return updateProductStatus(
                 tenantId,
                 businessId,
@@ -184,7 +299,6 @@ public class ProductService {
             UUID tenantId,
             UUID businessId
     ) {
-
         return businessRepository.findByIdAndTenantId(
                 businessId,
                 tenantId
@@ -197,7 +311,6 @@ public class ProductService {
             UUID businessId,
             UUID categoryId
     ) {
-
         if (categoryId == null) {
             return null;
         }
@@ -213,7 +326,6 @@ public class ProductService {
     }
 
     private void validateBusinessIsActive(Business business) {
-
         if (!business.isActive()) {
             throw new IllegalArgumentException(
                     "Cannot manage products under an inactive business"
@@ -222,7 +334,6 @@ public class ProductService {
     }
 
     private void validateCategoryIsActive(Category category) {
-
         if (category != null && !category.isActive()) {
             throw new IllegalArgumentException(
                     "Cannot assign a product to an inactive category"
@@ -235,7 +346,6 @@ public class ProductService {
             String sku,
             UUID excludeProductId
     ) {
-
         boolean exists = excludeProductId == null
                 ? productRepository.existsByBusiness_IdAndSkuIgnoreCase(
                 businessId,
@@ -259,7 +369,6 @@ public class ProductService {
             String barcode,
             UUID excludeProductId
     ) {
-
         if (barcode == null) {
             return;
         }
@@ -283,11 +392,22 @@ public class ProductService {
     }
 
     private String normalizeBarcode(String barcode) {
-
         if (barcode == null || barcode.isBlank()) {
             return null;
         }
 
         return barcode.trim();
+    }
+
+    private String normalizeSearchTerm(String term) {
+        if (term == null || term.isBlank()) {
+            return null;
+        }
+
+        return term.trim();
+    }
+
+    private String contains(String value) {
+        return "%" + value.toLowerCase(Locale.ROOT) + "%";
     }
 }
