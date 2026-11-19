@@ -3,6 +3,7 @@ package com.possaas.possaasbackend.product;
 
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
+import com.possaas.possaasbackend.category.Category;
 import com.possaas.possaasbackend.category.CategoryRepository;
 import com.possaas.possaasbackend.product.dto.CreateProductRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,10 @@ class ProductServiceTest {
 
         stubActiveBusiness();
 
+        UUID categoryId = UUID.randomUUID();
+        Category category = new Category();
+        category.setActive(true);
+
         CreateProductRequest request = new CreateProductRequest(
                 " MILK-001 ",
                 " Fresh Milk 500ml ",
@@ -71,7 +76,7 @@ class ProductServiceTest {
                 new BigDecimal("60.00"),
                 new BigDecimal("16.0000"),
                 false,
-                null
+                categoryId
         );
 
         when(productRepository.existsByBusiness_IdAndSkuIgnoreCase(
@@ -81,6 +86,9 @@ class ProductServiceTest {
         when(productRepository.existsByBusiness_IdAndBarcodeIgnoreCase(
                 businessId, "616110000001"
         )).thenReturn(false);
+
+        when(categoryRepository.findByIdAndBusiness_Id(categoryId, businessId))
+                .thenReturn(Optional.of(category));
 
         when(productRepository.save(any(Product.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -95,9 +103,41 @@ class ProductServiceTest {
         assertEquals(new BigDecimal("45.00"), result.getPurchasePrice());
         assertEquals(new BigDecimal("60.00"), result.getSellingPrice());
         assertEquals(new BigDecimal("16.0000"), result.getTaxRate());
+        assertSame(category, result.getCategory());
         assertTrue(result.isActive());
 
         verify(productRepository).save(any(Product.class));
+    }
+
+    @Test
+    void shouldRejectProductCreationWhenCategoryIdIsNull() {
+
+        stubActiveBusiness();
+
+        CreateProductRequest request = new CreateProductRequest(
+                "MILK-001",
+                "Fresh Milk",
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                new BigDecimal("60.00"),
+                BigDecimal.ZERO,
+                false,
+                null
+        );
+
+        when(productRepository.existsByBusiness_IdAndSkuIgnoreCase(
+                businessId, "MILK-001"
+        )).thenReturn(false);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.createProduct(tenantId, businessId, request)
+        );
+
+        assertEquals("Category ID is required", exception.getMessage());
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     @Test
@@ -115,7 +155,7 @@ class ProductServiceTest {
                 new BigDecimal("60.00"),
                 BigDecimal.ZERO,
                 false,
-                null
+                UUID.randomUUID()
         );
 
         when(productRepository.existsByBusiness_IdAndSkuIgnoreCase(
@@ -166,6 +206,44 @@ class ProductServiceTest {
     }
 
     @Test
+    void shouldRejectProductCreationWhenCategoryIsInactive() {
+
+        stubActiveBusiness();
+
+        UUID categoryId = UUID.randomUUID();
+        Category inactiveCategory = new Category();
+        inactiveCategory.setActive(false);
+
+        CreateProductRequest request = new CreateProductRequest(
+                "MILK-002",
+                "Fresh Milk",
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                new BigDecimal("60.00"),
+                BigDecimal.ZERO,
+                false,
+                categoryId
+        );
+
+        when(productRepository.existsByBusiness_IdAndSkuIgnoreCase(
+                businessId, "MILK-002"
+        )).thenReturn(false);
+
+        when(categoryRepository.findByIdAndBusiness_Id(categoryId, businessId))
+                .thenReturn(Optional.of(inactiveCategory));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> productService.createProduct(tenantId, businessId, request)
+        );
+
+        assertEquals("Cannot assign a product to an inactive category", exception.getMessage());
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void shouldRejectProductCreationForInactiveBusiness() {
 
         when(business.isActive()).thenReturn(false);
@@ -180,7 +258,7 @@ class ProductServiceTest {
                 new BigDecimal("60.00"),
                 BigDecimal.ZERO,
                 false,
-                null
+                UUID.randomUUID()
         );
 
         assertThrows(

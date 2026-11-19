@@ -1,6 +1,7 @@
 package com.possaas.possaasbackend.product;
 
 import com.possaas.possaasbackend.business.Business;
+import com.possaas.possaasbackend.category.Category;
 import com.possaas.possaasbackend.common.exception.GlobalExceptionHandler;
 import com.possaas.possaasbackend.product.dto.CreateProductRequest;
 import com.possaas.possaasbackend.product.dto.UpdateProductRequest;
@@ -53,6 +54,7 @@ class ProductControllerTest {
     private UUID tenantId;
     private UUID businessId;
     private UUID productId;
+    private UUID categoryId;
     private Business business;
     private AuthenticatedUser authenticatedUser;
 
@@ -61,6 +63,7 @@ class ProductControllerTest {
         tenantId = UUID.randomUUID();
         businessId = UUID.randomUUID();
         productId = UUID.randomUUID();
+        categoryId = UUID.randomUUID();
 
         business = new Business();
         business.setId(businessId);
@@ -145,9 +148,9 @@ class ProductControllerTest {
                     "sellingPrice": 60.00,
                     "taxRate": 16.0000,
                     "taxInclusive": false,
-                    "categoryId": null
+                    "categoryId": "%s"
                 }
-                """;
+                """.formatted(categoryId);
     }
 
     // =========================================================================
@@ -159,6 +162,10 @@ class ProductControllerTest {
         Product product = buildProduct(
                 productId, "MILK-001", "Fresh Milk 500ml", true
         );
+        Category category = new Category();
+        ReflectionTestUtils.setField(category, "id", categoryId);
+        category.setName("Dairy");
+        product.setCategory(category);
 
         when(productService.createProduct(
                 eq(tenantId),
@@ -174,6 +181,8 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.message").value("Product created successfully"))
                 .andExpect(jsonPath("$.data.id").value(productId.toString()))
                 .andExpect(jsonPath("$.data.businessId").value(businessId.toString()))
+                .andExpect(jsonPath("$.data.categoryId").value(categoryId.toString()))
+                .andExpect(jsonPath("$.data.categoryName").value("Dairy"))
                 .andExpect(jsonPath("$.data.sku").value("MILK-001"))
                 .andExpect(jsonPath("$.data.name").value("Fresh Milk 500ml"))
                 .andExpect(jsonPath("$.data.purchasePrice").value(45.00))
@@ -195,9 +204,10 @@ class ProductControllerTest {
                     "purchasePrice": 45.00,
                     "sellingPrice": 60.00,
                     "taxRate": 16.00,
-                    "taxInclusive": false
+                    "taxInclusive": false,
+                    "categoryId": "%s"
                 }
-                """;
+                """.formatted(categoryId);
 
         mockMvc.perform(post("/api/businesses/" + businessId + "/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -218,9 +228,10 @@ class ProductControllerTest {
                     "name": "Fresh Milk",
                     "purchasePrice": 45.00,
                     "taxRate": 16.00,
-                    "taxInclusive": false
+                    "taxInclusive": false,
+                    "categoryId": "%s"
                 }
-                """;
+                """.formatted(categoryId);
 
         mockMvc.perform(post("/api/businesses/" + businessId + "/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -229,6 +240,87 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.success").value(false));
 
         verify(productService, never()).createProduct(any(), any(), any());
+    }
+
+    @Test
+    void createProduct_ValidationError_NullCategoryId() throws Exception {
+        String json = """
+                {
+                    "sku": "MILK-001",
+                    "name": "Fresh Milk",
+                    "purchasePrice": 45.00,
+                    "sellingPrice": 60.00,
+                    "taxRate": 16.00,
+                    "taxInclusive": false,
+                    "categoryId": null
+                }
+                """;
+
+        mockMvc.perform(post("/api/businesses/" + businessId + "/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message")
+                        .value(Matchers.containsString("Category ID is required")));
+
+        verify(productService, never()).createProduct(any(), any(), any());
+    }
+
+    @Test
+    void createProduct_ValidationError_MissingCategoryId() throws Exception {
+        String json = """
+                {
+                    "sku": "MILK-001",
+                    "name": "Fresh Milk",
+                    "purchasePrice": 45.00,
+                    "sellingPrice": 60.00,
+                    "taxRate": 16.00,
+                    "taxInclusive": false
+                }
+                """;
+
+        mockMvc.perform(post("/api/businesses/" + businessId + "/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message")
+                        .value(Matchers.containsString("Category ID is required")));
+
+        verify(productService, never()).createProduct(any(), any(), any());
+    }
+
+    @Test
+    void createProduct_CategoryNotFound_ReturnsBadRequest() throws Exception {
+        when(productService.createProduct(
+                eq(tenantId),
+                eq(businessId),
+                any(CreateProductRequest.class)
+        )).thenThrow(new IllegalArgumentException("Category not found in this business"));
+
+        mockMvc.perform(post("/api/businesses/" + businessId + "/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validProductJson()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Category not found in this business"));
+    }
+
+    @Test
+    void createProduct_InactiveCategory_ReturnsBadRequest() throws Exception {
+        when(productService.createProduct(
+                eq(tenantId),
+                eq(businessId),
+                any(CreateProductRequest.class)
+        )).thenThrow(new IllegalArgumentException("Cannot assign a product to an inactive category"));
+
+        mockMvc.perform(post("/api/businesses/" + businessId + "/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validProductJson()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Cannot assign a product to an inactive category"));
     }
 
     @Test

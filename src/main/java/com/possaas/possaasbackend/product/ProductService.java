@@ -47,6 +47,10 @@ public class ProductService {
         validateUniqueSku(businessId, sku, null);
         validateUniqueBarcode(businessId, barcode, null);
 
+        if (request.categoryId() == null) {
+            throw new IllegalArgumentException("Category ID is required");
+        }
+
         Category category = getCategory(businessId, request.categoryId());
         validateCategoryIsActive(category);
 
