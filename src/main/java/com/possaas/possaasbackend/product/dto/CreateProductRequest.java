@@ -40,6 +40,7 @@ public record CreateProductRequest(
 
         boolean taxInclusive,
 
+        @NotNull(message = "Category ID is required")
         UUID categoryId
 
 ) {}
