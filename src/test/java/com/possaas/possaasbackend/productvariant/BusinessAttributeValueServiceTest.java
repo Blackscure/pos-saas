@@ -1,8 +1,8 @@
+
 package com.possaas.possaasbackend.productvariant;
 
-import com.possaas.possaasbackend.productvariant.dto.BusinessAttributeResponse;
-import com.possaas.possaasbackend.productvariant.dto.CreateBusinessAttributeRequest;
-import com.possaas.possaasbackend.productvariant.dto.UpdateBusinessAttributeRequest;
+import com.possaas.possaasbackend.productvariant.dto.BusinessAttributeValueResponse;
+import com.possaas.possaasbackend.productvariant.dto.CreateBusinessAttributeValueRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,416 +19,372 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class BusinessAttributeServiceTest {
+class BusinessAttributeValueServiceTest {
 
     @Mock
     private BusinessAttributeRepository businessAttributeRepository;
 
+    @Mock
+    private BusinessAttributeValueRepository businessAttributeValueRepository;
+
     @InjectMocks
-    private BusinessAttributeService businessAttributeService;
+    private BusinessAttributeValueService businessAttributeValueService;
 
     private UUID businessId;
     private UUID attributeId;
+    private UUID valueId;
+
+    private BusinessAttribute attribute;
+    private BusinessAttributeValue attributeValue;
 
     @BeforeEach
     void setUp() {
         businessId = UUID.randomUUID();
         attributeId = UUID.randomUUID();
+        valueId = UUID.randomUUID();
+
+        attribute = new BusinessAttribute();
+        attribute.setId(attributeId);
+        attribute.setBusinessId(businessId);
+
+        attributeValue = new BusinessAttributeValue();
+        attributeValue.setId(valueId);
+        attributeValue.setBusinessId(businessId);
+        attributeValue.setAttributeId(attributeId);
+        attributeValue.setValue("Red");
     }
 
-    // --------------------------------------------------
-    // CREATE ATTRIBUTE TESTS
-    // --------------------------------------------------
+    // CREATE
 
     @Test
-    void shouldCreateAttributeSuccessfully() {
+    void shouldCreateAttributeValueSuccessfully() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Red");
 
-        CreateBusinessAttributeRequest request =
-                new CreateBusinessAttributeRequest(
-                        "Size",
-                        "size"
-                );
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "SIZE"
-                )).thenReturn(false);
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Red"))
+                .thenReturn(false);
 
-        when(businessAttributeRepository.save(any(BusinessAttribute.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(businessAttributeValueRepository.save(any(BusinessAttributeValue.class)))
+                .thenReturn(attributeValue);
 
-        BusinessAttributeResponse response =
-                businessAttributeService.createAttribute(
-                        businessId,
-                        request
-                );
+        BusinessAttributeValueResponse response =
+                businessAttributeValueService.createAttributeValue(
+                        businessId, attributeId, request);
 
         assertNotNull(response);
-        assertEquals(businessId, response.businessId());
-        assertEquals("Size", response.name());
-        assertEquals("SIZE", response.code());
+        assertEquals("Red", response.value());
 
-        verify(businessAttributeRepository).save(any(BusinessAttribute.class));
+        verify(businessAttributeValueRepository).save(any(BusinessAttributeValue.class));
     }
 
     @Test
-    void shouldNormalizeAttributeCodeToUppercase() {
+    void shouldTrimValueWhenCreatingAttributeValue() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("  Red  ");
 
-        CreateBusinessAttributeRequest request =
-                new CreateBusinessAttributeRequest(
-                        "Color",
-                        " color "
-                );
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "COLOR"
-                )).thenReturn(false);
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Red"))
+                .thenReturn(false);
 
-        when(businessAttributeRepository.save(any(BusinessAttribute.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(businessAttributeValueRepository.save(any(BusinessAttributeValue.class)))
+                .thenReturn(attributeValue);
 
-        BusinessAttributeResponse response =
-                businessAttributeService.createAttribute(
-                        businessId,
-                        request
-                );
+        businessAttributeValueService.createAttributeValue(
+                businessId, attributeId, request);
 
-        assertEquals("COLOR", response.code());
+        verify(businessAttributeValueRepository).save(argThat(value ->
+                "Red".equals(value.getValue())
+        ));
     }
 
     @Test
-    void shouldRejectDuplicateAttributeCode() {
+    void shouldRejectDuplicateAttributeValue() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Red");
 
-        CreateBusinessAttributeRequest request =
-                new CreateBusinessAttributeRequest(
-                        "Size",
-                        "SIZE"
-                );
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "SIZE"
-                )).thenReturn(true);
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Red"))
+                .thenReturn(true);
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> businessAttributeService.createAttribute(
-                        businessId,
-                        request
-                )
-        );
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.createAttributeValue(
+                        businessId, attributeId, request));
 
-        verify(businessAttributeRepository, never())
-                .save(any(BusinessAttribute.class));
-    }
-
-    // --------------------------------------------------
-    // GET ALL ATTRIBUTES TESTS
-    // --------------------------------------------------
-
-    @Test
-    void shouldReturnAllBusinessAttributes() {
-
-        BusinessAttribute size = createAttribute(
-                UUID.randomUUID(),
-                businessId,
-                "Size",
-                "SIZE"
-        );
-
-        BusinessAttribute color = createAttribute(
-                UUID.randomUUID(),
-                businessId,
-                "Color",
-                "COLOR"
-        );
-
-        when(businessAttributeRepository.findAllByBusinessId(businessId))
-                .thenReturn(List.of(size, color));
-
-        List<BusinessAttributeResponse> response =
-                businessAttributeService.getAllAttributes(businessId);
-
-        assertEquals(2, response.size());
-
-        assertEquals("Size", response.get(0).name());
-        assertEquals("SIZE", response.get(0).code());
-
-        assertEquals("Color", response.get(1).name());
-        assertEquals("COLOR", response.get(1).code());
-
-        verify(businessAttributeRepository)
-                .findAllByBusinessId(businessId);
+        verify(businessAttributeValueRepository, never())
+                .save(any(BusinessAttributeValue.class));
     }
 
     @Test
-    void shouldReturnEmptyListWhenBusinessHasNoAttributes() {
+    void shouldRejectCreationWhenAttributeDoesNotBelongToBusiness() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.empty());
 
-        when(businessAttributeRepository.findAllByBusinessId(businessId))
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Red");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.createAttributeValue(
+                        businessId, attributeId, request));
+    }
+
+    // GET ALL
+
+    @Test
+    void shouldReturnAllAttributeValues() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findAllByBusinessIdAndAttributeId(businessId, attributeId))
+                .thenReturn(List.of(attributeValue));
+
+        List<BusinessAttributeValueResponse> response =
+                businessAttributeValueService.getAttributeValues(
+                        businessId, attributeId);
+
+        assertEquals(1, response.size());
+        assertEquals("Red", response.get(0).value());
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenNoAttributeValuesExist() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findAllByBusinessIdAndAttributeId(businessId, attributeId))
                 .thenReturn(List.of());
 
-        List<BusinessAttributeResponse> response =
-                businessAttributeService.getAllAttributes(businessId);
+        List<BusinessAttributeValueResponse> response =
+                businessAttributeValueService.getAttributeValues(
+                        businessId, attributeId);
 
-        assertNotNull(response);
         assertTrue(response.isEmpty());
     }
 
-    // --------------------------------------------------
-    // GET ATTRIBUTE BY ID TESTS
-    // --------------------------------------------------
+    @Test
+    void shouldRejectGettingValuesForInvalidAttribute() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.getAttributeValues(
+                        businessId, attributeId));
+    }
+
+    // GET BY ID
 
     @Test
-    void shouldReturnAttributeById() {
-
-        BusinessAttribute attribute = createAttribute(
-                attributeId,
-                businessId,
-                "Size",
-                "SIZE"
-        );
-
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
+    void shouldReturnAttributeValueById() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
                 .thenReturn(Optional.of(attribute));
 
-        BusinessAttributeResponse response =
-                businessAttributeService.getAttributeById(
-                        businessId,
-                        attributeId
-                );
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(attributeValue));
 
-        assertNotNull(response);
-        assertEquals(attributeId, response.id());
-        assertEquals(businessId, response.businessId());
-        assertEquals("Size", response.name());
-        assertEquals("SIZE", response.code());
+        BusinessAttributeValueResponse response =
+                businessAttributeValueService.getAttributeValueById(
+                        businessId, attributeId, valueId);
+
+        assertEquals(valueId, response.id());
+        assertEquals("Red", response.value());
     }
 
     @Test
-    void shouldThrowExceptionWhenAttributeDoesNotExist() {
+    void shouldThrowExceptionWhenAttributeValueDoesNotExist() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
                 .thenReturn(Optional.empty());
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> businessAttributeService.getAttributeById(
-                        businessId,
-                        attributeId
-                )
-        );
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.getAttributeValueById(
+                        businessId, attributeId, valueId));
+    }
+
+    // UPDATE
+
+    @Test
+    void shouldUpdateAttributeValueSuccessfully() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Blue");
+
+        BusinessAttributeValue updatedValue = new BusinessAttributeValue();
+        updatedValue.setId(valueId);
+        updatedValue.setBusinessId(businessId);
+        updatedValue.setAttributeId(attributeId);
+        updatedValue.setValue("Blue");
+
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(attributeValue));
+
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Blue"))
+                .thenReturn(false);
+
+        when(businessAttributeValueRepository.save(attributeValue))
+                .thenReturn(updatedValue);
+
+        BusinessAttributeValueResponse response =
+                businessAttributeValueService.updateAttributeValue(
+                        businessId, attributeId, valueId, request);
+
+        assertEquals("Blue", response.value());
     }
 
     @Test
-    void shouldNotRetrieveAttributeFromAnotherBusiness() {
+    void shouldTrimValueWhenUpdatingAttributeValue() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("  Blue  ");
 
-        UUID anotherBusinessId = UUID.randomUUID();
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, anotherBusinessId))
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(attributeValue));
+
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Blue"))
+                .thenReturn(false);
+
+        when(businessAttributeValueRepository.save(attributeValue))
+                .thenReturn(attributeValue);
+
+        businessAttributeValueService.updateAttributeValue(
+                businessId, attributeId, valueId, request);
+
+        assertEquals("Blue", attributeValue.getValue());
+    }
+
+    @Test
+    void shouldRejectDuplicateValueWhenUpdating() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Blue");
+
+        BusinessAttributeValue anotherValue = new BusinessAttributeValue();
+        anotherValue.setId(UUID.randomUUID());
+        anotherValue.setBusinessId(businessId);
+        anotherValue.setAttributeId(attributeId);
+        anotherValue.setValue("Red");
+
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(anotherValue));
+
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Blue"))
+                .thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.updateAttributeValue(
+                        businessId, attributeId, valueId, request));
+
+        verify(businessAttributeValueRepository, never())
+                .save(any(BusinessAttributeValue.class));
+    }
+
+    @Test
+    void shouldAllowUpdatingValueWithoutChangingIt() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Red");
+
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(attributeValue));
+
+        when(businessAttributeValueRepository
+                .existsByBusinessIdAndAttributeIdAndValueIgnoreCase(
+                        businessId, attributeId, "Red"))
+                .thenReturn(true);
+
+        when(businessAttributeValueRepository.save(attributeValue))
+                .thenReturn(attributeValue);
+
+        BusinessAttributeValueResponse response =
+                businessAttributeValueService.updateAttributeValue(
+                        businessId, attributeId, valueId, request);
+
+        assertEquals("Red", response.value());
+    }
+
+    @Test
+    void shouldThrowExceptionWhenUpdatingNonexistentValue() {
+        CreateBusinessAttributeValueRequest request =
+                new CreateBusinessAttributeValueRequest("Blue");
+
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
+
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
                 .thenReturn(Optional.empty());
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> businessAttributeService.getAttributeById(
-                        anotherBusinessId,
-                        attributeId
-                )
-        );
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.updateAttributeValue(
+                        businessId, attributeId, valueId, request));
     }
 
-    // --------------------------------------------------
-    // UPDATE ATTRIBUTE TESTS
-    // --------------------------------------------------
+    // DELETE
 
     @Test
-    void shouldUpdateAttributeSuccessfully() {
+    void shouldDeleteAttributeValueSuccessfully() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        BusinessAttribute existingAttribute = createAttribute(
-                attributeId,
-                businessId,
-                "Size",
-                "SIZE"
-        );
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.of(attributeValue));
 
-        UpdateBusinessAttributeRequest request =
-                new UpdateBusinessAttributeRequest(
-                        "Product Size",
-                        "product_size"
-                );
+        businessAttributeValueService.deleteAttributeValue(
+                businessId, attributeId, valueId);
 
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
-                .thenReturn(Optional.of(existingAttribute));
-
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "PRODUCT_SIZE"
-                )).thenReturn(false);
-
-        when(businessAttributeRepository.save(any(BusinessAttribute.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        BusinessAttributeResponse response =
-                businessAttributeService.updateAttribute(
-                        businessId,
-                        attributeId,
-                        request
-                );
-
-        assertNotNull(response);
-        assertEquals(attributeId, response.id());
-        assertEquals("Product Size", response.name());
-        assertEquals("PRODUCT_SIZE", response.code());
-
-        verify(businessAttributeRepository)
-                .save(existingAttribute);
+        verify(businessAttributeValueRepository).delete(attributeValue);
     }
 
     @Test
-    void shouldTrimAttributeNameWhenUpdating() {
+    void shouldThrowExceptionWhenDeletingNonexistentValue() {
+        when(businessAttributeRepository.findByIdAndBusinessId(attributeId, businessId))
+                .thenReturn(Optional.of(attribute));
 
-        BusinessAttribute existingAttribute = createAttribute(
-                attributeId,
-                businessId,
-                "Size",
-                "SIZE"
-        );
+        when(businessAttributeValueRepository
+                .findByIdAndBusinessIdAndAttributeId(valueId, businessId, attributeId))
+                .thenReturn(Optional.empty());
 
-        UpdateBusinessAttributeRequest request =
-                new UpdateBusinessAttributeRequest(
-                        "  Product Size  ",
-                        "PRODUCT_SIZE"
-                );
+        assertThrows(IllegalArgumentException.class,
+                () -> businessAttributeValueService.deleteAttributeValue(
+                        businessId, attributeId, valueId));
 
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
-                .thenReturn(Optional.of(existingAttribute));
-
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "PRODUCT_SIZE"
-                )).thenReturn(false);
-
-        when(businessAttributeRepository.save(any(BusinessAttribute.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        BusinessAttributeResponse response =
-                businessAttributeService.updateAttribute(
-                        businessId,
-                        attributeId,
-                        request
-                );
-
-        assertEquals("Product Size", response.name());
-    }
-
-    @Test
-    void shouldRejectDuplicateCodeWhenUpdatingAttribute() {
-
-        BusinessAttribute existingAttribute = createAttribute(
-                attributeId,
-                businessId,
-                "Size",
-                "SIZE"
-        );
-
-        UpdateBusinessAttributeRequest request =
-                new UpdateBusinessAttributeRequest(
-                        "Color",
-                        "COLOR"
-                );
-
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
-                .thenReturn(Optional.of(existingAttribute));
-
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "COLOR"
-                )).thenReturn(true);
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> businessAttributeService.updateAttribute(
-                        businessId,
-                        attributeId,
-                        request
-                )
-        );
-
-        verify(businessAttributeRepository, never())
-                .save(any(BusinessAttribute.class));
-    }
-
-    @Test
-    void shouldAllowUpdatingAttributeWithoutChangingItsCode() {
-
-        BusinessAttribute existingAttribute = createAttribute(
-                attributeId,
-                businessId,
-                "Size",
-                "SIZE"
-        );
-
-        UpdateBusinessAttributeRequest request =
-                new UpdateBusinessAttributeRequest(
-                        "Product Size",
-                        "SIZE"
-                );
-
-        when(businessAttributeRepository
-                .findByIdAndBusinessId(attributeId, businessId))
-                .thenReturn(Optional.of(existingAttribute));
-
-        when(businessAttributeRepository
-                .existsByBusinessIdAndCodeIgnoreCase(
-                        businessId,
-                        "SIZE"
-                )).thenReturn(true);
-
-        when(businessAttributeRepository.save(any(BusinessAttribute.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        BusinessAttributeResponse response =
-                businessAttributeService.updateAttribute(
-                        businessId,
-                        attributeId,
-                        request
-                );
-
-        assertEquals("Product Size", response.name());
-        assertEquals("SIZE", response.code());
-
-        verify(businessAttributeRepository)
-                .save(existingAttribute);
-    }
-
-    // --------------------------------------------------
-    // HELPER
-    // --------------------------------------------------
-
-    private BusinessAttribute createAttribute(
-            UUID id,
-            UUID businessId,
-            String name,
-            String code
-    ) {
-        BusinessAttribute attribute = new BusinessAttribute();
-        attribute.setId(id);
-        attribute.setBusinessId(businessId);
-        attribute.setName(name);
-        attribute.setCode(code);
-
-        return attribute;
+        verify(businessAttributeValueRepository, never())
+                .delete(any(BusinessAttributeValue.class));
     }
 }
