@@ -2,6 +2,7 @@ package com.possaas.possaasbackend.security;
 
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
+import com.possaas.possaasbackend.business.dto.BusinessResponse;
 import com.possaas.possaasbackend.security.dto.LoginRequest;
 import com.possaas.possaasbackend.security.dto.LoginResponse;
 import com.possaas.possaasbackend.user.User;
@@ -84,16 +85,20 @@ public class AuthenticationService {
                 business.getId()
         );
 
-        // 8. Return authenticated user information
+// 8. Return authenticated user and business information
         return new LoginResponse(
                 accessToken,
                 "Bearer",
                 accessTokenExpiration,
-                user.getId(),
-                business.getId(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getEmail()
+                new LoginResponse.UserSummary(
+                        user.getId(),
+                        user.getFirstName(),
+                        user.getLastName(),
+                        user.getEmail(),
+                        user.getPhone(),
+                        user.isActive()
+                ),
+                BusinessResponse.fromEntity(business)
         );
     }
 

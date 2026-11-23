@@ -1,3 +1,4 @@
+
 package com.possaas.possaasbackend.product;
 
 import com.possaas.possaasbackend.business.Business;
@@ -162,6 +163,7 @@ class ProductControllerTest {
         Product product = buildProduct(
                 productId, "MILK-001", "Fresh Milk 500ml", true
         );
+
         Category category = new Category();
         ReflectionTestUtils.setField(category, "id", categoryId);
         category.setName("Dairy");
@@ -180,9 +182,9 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Product created successfully"))
                 .andExpect(jsonPath("$.data.id").value(productId.toString()))
-                .andExpect(jsonPath("$.data.businessId").value(businessId.toString()))
-                .andExpect(jsonPath("$.data.categoryId").value(categoryId.toString()))
-                .andExpect(jsonPath("$.data.categoryName").value("Dairy"))
+                .andExpect(jsonPath("$.data.business.id").value(business.getId().toString()))
+                .andExpect(jsonPath("$.data.category.id").value(categoryId.toString()))
+                .andExpect(jsonPath("$.data.category.name").value("Dairy"))
                 .andExpect(jsonPath("$.data.sku").value("MILK-001"))
                 .andExpect(jsonPath("$.data.name").value("Fresh Milk 500ml"))
                 .andExpect(jsonPath("$.data.purchasePrice").value(45.00))
