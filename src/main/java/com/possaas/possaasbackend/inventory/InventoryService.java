@@ -2,10 +2,13 @@ package com.possaas.possaasbackend.inventory;
 
 import com.possaas.possaasbackend.branch.Branch;
 import com.possaas.possaasbackend.branch.BranchRepository;
+
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
+
 import com.possaas.possaasbackend.inventory.dto.CreateInventoryRequest;
 import com.possaas.possaasbackend.inventory.dto.InventoryResponse;
+
 import com.possaas.possaasbackend.inventory.dto.UpdateInventoryRequest;
 import com.possaas.possaasbackend.product.Product;
 
@@ -16,6 +19,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -60,7 +64,10 @@ public class InventoryService {
         Branch branch = getBranchByBusiness(branchId, businessId);
         validateBranchIsActive(branch);
 
-        Product product = getProductByBusiness(request.productId(), businessId);
+        Product product = getProductByBusiness(
+                request.productId(),
+                businessId
+        );
         validateProductIsActive(product);
 
         ProductVariant productVariant = null;
@@ -74,9 +81,7 @@ public class InventoryService {
             );
 
             productVariant = getProductVariant(
-                    request.productVariantId(),
-                    businessId,
-                    request.productId()
+                    request.productVariantId()
             );
         }
 
@@ -101,13 +106,13 @@ public class InventoryService {
         inventory.setBranchId(branchId);
         inventory.setProductId(request.productId());
         inventory.setProductVariantId(request.productVariantId());
-        inventory.setQuantityOnHand(java.math.BigDecimal.ZERO);
-        inventory.setQuantityReserved(java.math.BigDecimal.ZERO);
+        inventory.setQuantityOnHand(BigDecimal.ZERO);
+        inventory.setQuantityReserved(BigDecimal.ZERO);
         inventory.setReorderLevel(request.reorderLevel());
 
         Inventory savedInventory = inventoryRepository.save(inventory);
 
-        return InventoryResponse.from(
+        return toResponse(
                 savedInventory,
                 business,
                 branch,
@@ -243,7 +248,7 @@ public class InventoryService {
     }
 
     // =========================================================
-    // RESPONSE MAPPER
+    // RESPONSE MAPPING
     // =========================================================
 
     private InventoryResponse toResponse(Inventory inventory) {
@@ -255,19 +260,13 @@ public class InventoryService {
                 ));
 
         Branch branch = branchRepository
-                .findByIdAndBusiness_Id(
-                        inventory.getBranchId(),
-                        inventory.getBusinessId()
-                )
+                .findById(inventory.getBranchId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Branch not found for inventory"
                 ));
 
         Product product = productRepository
-                .findByIdAndBusiness_Id(
-                        inventory.getProductId(),
-                        inventory.getBusinessId()
-                )
+                .findById(inventory.getProductId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Product not found for inventory"
                 ));
@@ -276,11 +275,26 @@ public class InventoryService {
 
         if (inventory.getProductVariantId() != null) {
             productVariant = getProductVariant(
-                    inventory.getProductVariantId(),
-                    inventory.getBusinessId(),
-                    inventory.getProductId()
+                    inventory.getProductVariantId()
             );
         }
+
+        return toResponse(
+                inventory,
+                business,
+                branch,
+                product,
+                productVariant
+        );
+    }
+
+    private InventoryResponse toResponse(
+            Inventory inventory,
+            Business business,
+            Branch branch,
+            Product product,
+            ProductVariant productVariant
+    ) {
 
         return InventoryResponse.from(
                 inventory,
@@ -295,7 +309,10 @@ public class InventoryService {
     // VALIDATION HELPERS
     // =========================================================
 
-    private Business getBusinessByTenant(UUID tenantId, UUID businessId) {
+    private Business getBusinessByTenant(
+            UUID tenantId,
+            UUID businessId
+    ) {
 
         return businessRepository
                 .findByIdAndTenantId(businessId, tenantId)
@@ -313,7 +330,10 @@ public class InventoryService {
         }
     }
 
-    private Branch getBranchByBusiness(UUID branchId, UUID businessId) {
+    private Branch getBranchByBusiness(
+            UUID branchId,
+            UUID businessId
+    ) {
 
         return branchRepository
                 .findByIdAndBusiness_Id(branchId, businessId)
@@ -331,7 +351,10 @@ public class InventoryService {
         }
     }
 
-    private Product getProductByBusiness(UUID productId, UUID businessId) {
+    private Product getProductByBusiness(
+            UUID productId,
+            UUID businessId
+    ) {
 
         return productRepository
                 .findByIdAndBusiness_Id(productId, businessId)
@@ -347,6 +370,15 @@ public class InventoryService {
                     "Product is inactive"
             );
         }
+    }
+
+    private ProductVariant getProductVariant(UUID variantId) {
+
+        return productVariantRepository
+                .findById(variantId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product variant not found"
+                ));
     }
 
     private void validateProductVariant(
@@ -367,22 +399,5 @@ public class InventoryService {
                     "Active product variant not found for this product"
             );
         }
-    }
-
-    private ProductVariant getProductVariant(
-            UUID variantId,
-            UUID businessId,
-            UUID productId
-    ) {
-
-        return productVariantRepository
-                .findByIdAndBusinessIdAndProductId(
-                        variantId,
-                        businessId,
-                        productId
-                )
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Product variant not found"
-                ));
     }
 }

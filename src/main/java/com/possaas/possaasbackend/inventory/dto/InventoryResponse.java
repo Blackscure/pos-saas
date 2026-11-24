@@ -48,12 +48,10 @@ public record InventoryResponse(
 
         return new InventoryResponse(
                 inventory.getId(),
-
                 BusinessSummary.from(business),
                 BranchSummary.from(branch),
                 ProductSummary.from(product),
                 ProductVariantSummary.from(productVariant),
-
                 inventory.getQuantityOnHand(),
                 inventory.getQuantityReserved(),
                 quantityAvailable,
@@ -73,15 +71,22 @@ public record InventoryResponse(
     public record BusinessSummary(
             UUID id,
             String name,
-            Object businessType,
+            String businessType,
             boolean active
     ) {
 
         public static BusinessSummary from(Business business) {
+
+            if (business == null) {
+                return null;
+            }
+
             return new BusinessSummary(
                     business.getId(),
                     business.getName(),
-                    business.getBusinessType(),
+                    business.getBusinessType() != null
+                            ? business.getBusinessType().name()
+                            : null,
                     business.isActive()
             );
         }
@@ -101,6 +106,11 @@ public record InventoryResponse(
     ) {
 
         public static BranchSummary from(Branch branch) {
+
+            if (branch == null) {
+                return null;
+            }
+
             return new BranchSummary(
                     branch.getId(),
                     branch.getName(),
@@ -126,6 +136,11 @@ public record InventoryResponse(
     ) {
 
         public static ProductSummary from(Product product) {
+
+            if (product == null) {
+                return null;
+            }
+
             return new ProductSummary(
                     product.getId(),
                     product.getName(),
@@ -147,7 +162,7 @@ public record InventoryResponse(
             String sku,
             String barcode,
             BigDecimal sellingPrice,
-            boolean active
+            Boolean active
     ) {
 
         public static ProductVariantSummary from(ProductVariant variant) {

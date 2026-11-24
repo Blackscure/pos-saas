@@ -1,5 +1,7 @@
 package com.possaas.possaasbackend.product.dto;
 
+import com.possaas.possaasbackend.business.dto.BusinessResponse;
+import com.possaas.possaasbackend.category.dto.CategoryResponse;
 import com.possaas.possaasbackend.product.Product;
 
 import java.math.BigDecimal;
@@ -9,18 +11,21 @@ import java.util.UUID;
 public record ProductResponse(
 
         UUID id,
-        UUID businessId,
-        UUID categoryId,
-        String categoryName,
+
+        BusinessResponse business,
+        CategoryResponse category,
+
         String sku,
         String name,
         String description,
         String barcode,
         String imageUrl,
+
         BigDecimal purchasePrice,
         BigDecimal sellingPrice,
         BigDecimal taxRate,
         boolean taxInclusive,
+
         boolean active,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -31,22 +36,24 @@ public record ProductResponse(
 
         return new ProductResponse(
                 product.getId(),
-                product.getBusiness().getId(),
+
+                BusinessResponse.fromEntity(product.getBusiness()),
+
                 product.getCategory() != null
-                        ? product.getCategory().getId()
+                        ? CategoryResponse.fromEntity(product.getCategory())
                         : null,
-                product.getCategory() != null
-                        ? product.getCategory().getName()
-                        : null,
+
                 product.getSku(),
                 product.getName(),
                 product.getDescription(),
                 product.getBarcode(),
                 product.getImageUrl(),
+
                 product.getPurchasePrice(),
                 product.getSellingPrice(),
                 product.getTaxRate(),
                 product.isTaxInclusive(),
+
                 product.isActive(),
                 product.getCreatedAt(),
                 product.getUpdatedAt()

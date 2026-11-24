@@ -1,3 +1,4 @@
+
 package com.possaas.possaasbackend.category;
 
 import com.possaas.possaasbackend.business.Business;
@@ -141,10 +142,10 @@ class CategoryControllerTest {
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.message").value("Category created successfully"))
                     .andExpect(jsonPath("$.data.id").value(categoryId.toString()))
-                    .andExpect(jsonPath("$.data.businessId").value(businessId.toString()))
+                    .andExpect(jsonPath("$.data.business.id").value(businessId.toString()))
                     .andExpect(jsonPath("$.data.name").value("Beverages"))
                     .andExpect(jsonPath("$.data.description").value("All drinks"))
-                    .andExpect(jsonPath("$.data.parentCategoryId").value(Matchers.nullValue()))
+                    .andExpect(jsonPath("$.data.parentCategory").value(Matchers.nullValue()))
                     .andExpect(jsonPath("$.data.active").value(true));
 
             verify(categoryService).createCategory(eq(tenantId), eq(businessId), any(CreateCategoryRequest.class));
@@ -175,8 +176,9 @@ class CategoryControllerTest {
                     .andExpect(jsonPath("$.success").value(true))
                     .andExpect(jsonPath("$.data.id").value(categoryId.toString()))
                     .andExpect(jsonPath("$.data.name").value("Hot Drinks"))
-                    .andExpect(jsonPath("$.data.parentCategoryId").value(parentId.toString()))
-                    .andExpect(jsonPath("$.data.parentCategoryName").value("Beverages"));
+                    .andExpect(jsonPath("$.data.parentCategory.id").value(parentId.toString()))
+                    .andExpect(jsonPath("$.data.parentCategory.name").value("Beverages"))
+                    .andExpect(jsonPath("$.data.parentCategory.active").value(true));
         }
 
         @Test

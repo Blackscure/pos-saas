@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.security;
 
 import com.possaas.possaasbackend.business.Business;
@@ -109,15 +108,25 @@ class AuthenticationServiceTest {
 
         LoginResponse response = authenticationService.login(loginRequest);
 
+        // Verify authentication response
         assertNotNull(response);
         assertEquals("mock-access-token", response.accessToken());
         assertEquals("Bearer", response.tokenType());
         assertEquals(900000L, response.expiresIn());
-        assertEquals(userId, response.userId());
-        assertEquals(businessId, response.businessId());
-        assertEquals("John", response.firstName());
-        assertEquals("Doe", response.lastName());
-        assertEquals("john@example.com", response.email());
+
+        // Verify nested user object
+        assertNotNull(response.user());
+        assertEquals(userId, response.user().id());
+        assertEquals("John", response.user().firstName());
+        assertEquals("Doe", response.user().lastName());
+        assertEquals("john@example.com", response.user().email());
+
+        // Verify nested business object
+        assertNotNull(response.business());
+        assertEquals(businessId, response.business().getId());
+
+        // Verify nested tenant object
+        assertNotNull(response.business().getTenant());
 
         verify(passwordEncoder).matches(
                 "John@12345",
