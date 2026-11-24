@@ -11,6 +11,7 @@ import com.possaas.possaasbackend.inventory.dto.InventoryResponse;
 
 import com.possaas.possaasbackend.inventory.dto.UpdateInventoryRequest;
 import com.possaas.possaasbackend.product.Product;
+
 import com.possaas.possaasbackend.product.ProductRepository;
 import com.possaas.possaasbackend.productvariant.ProductVariant;
 import com.possaas.possaasbackend.productvariant.ProductVariantRepository;
