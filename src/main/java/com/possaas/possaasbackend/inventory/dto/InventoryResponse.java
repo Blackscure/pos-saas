@@ -56,7 +56,9 @@ public record InventoryResponse(
                 inventory.getQuantityReserved(),
                 quantityAvailable,
                 inventory.getReorderLevel(),
+
                 lowStock,
+
                 inventory.getCreatedAt(),
                 inventory.getUpdatedAt()
         );
