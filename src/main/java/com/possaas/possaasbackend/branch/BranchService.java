@@ -1,10 +1,10 @@
+
 package com.possaas.possaasbackend.branch;
 
 import com.possaas.possaasbackend.branch.dto.CreateBranchRequest;
 import com.possaas.possaasbackend.branch.dto.UpdateBranchRequest;
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,117 +21,142 @@ public class BranchService {
 
     public BranchService(
             BranchRepository branchRepository,
-            BusinessRepository businessRepository) {
-
+            BusinessRepository businessRepository
+    ) {
         this.branchRepository = branchRepository;
         this.businessRepository = businessRepository;
     }
 
-    // Create a branch
-    public Branch createBranch(UUID businessId, CreateBranchRequest request) {
+    private Business getBusinessByTenant(
+            UUID tenantId,
+            UUID businessId
+    ) {
+        return businessRepository.findByIdAndTenantId(
+                businessId,
+                tenantId
+        ).orElseThrow(() ->
+                new IllegalArgumentException("Business not found"));
+    }
 
-        Business business = businessRepository.findById(businessId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Business not found"));
+    public Branch createBranch(
+            UUID tenantId,
+            UUID businessId,
+            CreateBranchRequest request
+    ) {
+        Business business = getBusinessByTenant(tenantId, businessId);
 
         if (!business.isActive()) {
             throw new IllegalArgumentException(
-                    "Cannot create a branch under an inactive business");
+                    "Cannot create a branch under an inactive business"
+            );
         }
 
         if (branchRepository.existsByBusiness_IdAndName(
                 businessId, request.name())) {
-
             throw new IllegalArgumentException(
-                    "A branch with this name already exists");
+                    "Branch name already exists"
+            );
         }
 
         if (branchRepository.existsByBusiness_IdAndCode(
                 businessId, request.code())) {
-
             throw new IllegalArgumentException(
-                    "A branch with this code already exists");
+                    "Branch code already exists"
+            );
         }
 
         Branch branch = new Branch();
-
-        branch.setBusiness(business);
         branch.setName(request.name());
         branch.setCode(request.code());
         branch.setPhone(request.phone());
         branch.setEmail(request.email());
         branch.setAddress(request.address());
+        branch.setBusiness(business);
         branch.setActive(true);
 
         return branchRepository.save(branch);
     }
 
-    // Get all branches belonging to a business with pagination
     @Transactional(readOnly = true)
     public Page<Branch> getBranchesByBusiness(
+            UUID tenantId,
             UUID businessId,
-            Pageable pageable) {
+            Pageable pageable
+    ) {
+        getBusinessByTenant(tenantId, businessId);
 
-        if (!businessRepository.existsById(businessId)) {
-            throw new IllegalArgumentException("Business not found");
-        }
-
-        return branchRepository.findAllByBusiness_Id(businessId, pageable);
+        return branchRepository.findAllByBusiness_Id(
+                businessId, pageable
+        );
     }
 
-    // Get a specific branch
     @Transactional(readOnly = true)
-    public Branch getBranchById(UUID businessId, UUID branchId) {
+    public Branch getBranchById(
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId
+    ) {
+        getBusinessByTenant(tenantId, businessId);
 
-        return branchRepository.findByIdAndBusiness_Id(branchId, businessId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("Branch not found"));
+        return branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId
+        ).orElseThrow(() ->
+                new IllegalArgumentException("Branch not found"));
     }
 
-    // Update branch details
     public Branch updateBranch(
+            UUID tenantId,
             UUID businessId,
             UUID branchId,
-            UpdateBranchRequest request) {
+            UpdateBranchRequest request
+    ) {
+        getBusinessByTenant(tenantId, businessId);
 
-        Branch existingBranch = getBranchById(businessId, branchId);
+        Branch branch = getBranchById(
+                tenantId, businessId, branchId
+        );
 
-        if (!existingBranch.getName().equals(request.name())
+        if (!branch.getName().equals(request.name())
                 && branchRepository.existsByBusiness_IdAndName(
                 businessId, request.name())) {
-
             throw new IllegalArgumentException(
-                    "A branch with this name already exists");
+                    "Branch name already exists"
+            );
         }
 
-        if (!existingBranch.getCode().equals(request.code())
+        if (!branch.getCode().equals(request.code())
                 && branchRepository.existsByBusiness_IdAndCode(
                 businessId, request.code())) {
-
             throw new IllegalArgumentException(
-                    "A branch with this code already exists");
+                    "Branch code already exists"
+            );
         }
 
-        existingBranch.setName(request.name());
-        existingBranch.setCode(request.code());
-        existingBranch.setPhone(request.phone());
-        existingBranch.setEmail(request.email());
-        existingBranch.setAddress(request.address());
+        branch.setName(request.name());
+        branch.setCode(request.code());
+        branch.setPhone(request.phone());
+        branch.setEmail(request.email());
+        branch.setAddress(request.address());
 
-        return branchRepository.save(existingBranch);
+        return branchRepository.save(branch);
     }
 
-    // Activate or deactivate a branch
     public Branch updateBranchStatus(
+            UUID tenantId,
             UUID businessId,
             UUID branchId,
-            boolean active) {
+            boolean active
+    ) {
+        Business business = getBusinessByTenant(tenantId, businessId);
 
-        Branch branch = getBranchById(businessId, branchId);
+        Branch branch = getBranchById(
+                tenantId, businessId, branchId
+        );
 
-        if (active && !branch.getBusiness().isActive()) {
+        if (active && !business.isActive()) {
             throw new IllegalArgumentException(
-                    "Cannot activate a branch under an inactive business");
+                    "Cannot activate a branch under an inactive business"
+            );
         }
 
         branch.setActive(active);
@@ -139,10 +164,14 @@ public class BranchService {
         return branchRepository.save(branch);
     }
 
-    // Soft-delete a branch
-    public Branch deleteBranch(UUID businessId, UUID branchId) {
-
-        Branch branch = getBranchById(businessId, branchId);
+    public Branch deleteBranch(
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId
+    ) {
+        Branch branch = getBranchById(
+                tenantId, businessId, branchId
+        );
 
         branch.setActive(false);
 

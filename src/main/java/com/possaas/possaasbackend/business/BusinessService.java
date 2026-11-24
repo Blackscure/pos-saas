@@ -243,4 +243,31 @@ public class BusinessService {
 
         return businessRepository.save(business);
     }
+
+
+    // Platform Admin: retrieve all businesses across tenants
+    @Transactional(readOnly = true)
+    public Page<Business> getAllBusinesses(Pageable pageable) {
+        return businessRepository.findAll(pageable);
+    }
+
+    // Platform Admin: retrieve a business by ID
+    @Transactional(readOnly = true)
+    public Business getBusinessById(UUID businessId) {
+        return businessRepository.findById(businessId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Business not found"));
+    }
+
+    // Platform Admin: activate or suspend a business
+    public Business updatePlatformBusinessStatus(
+            UUID businessId,
+            boolean active
+    ) {
+        Business business = getBusinessById(businessId);
+        business.setActive(active);
+
+        return businessRepository.save(business);
+    }
+
 }

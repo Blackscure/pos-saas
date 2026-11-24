@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.branch;
 
 import com.possaas.possaasbackend.branch.dto.CreateBranchRequest;
@@ -32,17 +31,25 @@ class BranchServiceTest {
     @InjectMocks
     private BranchService branchService;
 
+    private UUID tenantId;
     private UUID businessId;
     private UUID branchId;
     private Business business;
 
     @BeforeEach
     void setUp() {
+        tenantId = UUID.randomUUID();
         businessId = UUID.randomUUID();
         branchId = UUID.randomUUID();
 
         business = new Business();
         business.setActive(true);
+    }
+
+    private void mockBusinessExists() {
+        when(businessRepository.findByIdAndTenantId(
+                businessId, tenantId))
+                .thenReturn(Optional.of(business));
     }
 
     // CREATE BRANCH
@@ -58,8 +65,7 @@ class BranchServiceTest {
                 "Westlands, Nairobi"
         );
 
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
+        mockBusinessExists();
 
         when(branchRepository.existsByBusiness_IdAndName(
                 businessId, request.name()))
@@ -72,7 +78,8 @@ class BranchServiceTest {
         when(branchRepository.save(any(Branch.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Branch result = branchService.createBranch(businessId, request);
+        Branch result = branchService.createBranch(
+                tenantId, businessId, request);
 
         assertNotNull(result);
         assertEquals(request.name(), result.getName());
@@ -97,11 +104,13 @@ class BranchServiceTest {
                 null
         );
 
-        when(businessRepository.findById(businessId))
+        when(businessRepository.findByIdAndTenantId(
+                businessId, tenantId))
                 .thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
-                () -> branchService.createBranch(businessId, request));
+                () -> branchService.createBranch(
+                        tenantId, businessId, request));
 
         verify(branchRepository, never()).save(any());
     }
@@ -119,11 +128,11 @@ class BranchServiceTest {
                 null
         );
 
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
+        mockBusinessExists();
 
         assertThrows(IllegalArgumentException.class,
-                () -> branchService.createBranch(businessId, request));
+                () -> branchService.createBranch(
+                        tenantId, businessId, request));
 
         verify(branchRepository, never()).save(any());
     }
@@ -139,15 +148,15 @@ class BranchServiceTest {
                 null
         );
 
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
+        mockBusinessExists();
 
         when(branchRepository.existsByBusiness_IdAndName(
                 businessId, request.name()))
                 .thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
-                () -> branchService.createBranch(businessId, request));
+                () -> branchService.createBranch(
+                        tenantId, businessId, request));
 
         verify(branchRepository, never()).save(any());
     }
@@ -163,8 +172,7 @@ class BranchServiceTest {
                 null
         );
 
-        when(businessRepository.findById(businessId))
-                .thenReturn(Optional.of(business));
+        mockBusinessExists();
 
         when(branchRepository.existsByBusiness_IdAndName(
                 businessId, request.name()))
@@ -175,7 +183,8 @@ class BranchServiceTest {
                 .thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
-                () -> branchService.createBranch(businessId, request));
+                () -> branchService.createBranch(
+                        tenantId, businessId, request));
 
         verify(branchRepository, never()).save(any());
     }
@@ -187,10 +196,14 @@ class BranchServiceTest {
 
         Branch branch = new Branch();
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.of(branch));
 
-        Branch result = branchService.getBranchById(businessId, branchId);
+        Branch result = branchService.getBranchById(
+                tenantId, businessId, branchId);
 
         assertNotNull(result);
 
@@ -201,11 +214,15 @@ class BranchServiceTest {
     @Test
     void shouldThrowExceptionWhenBranchDoesNotExist() {
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
-                () -> branchService.getBranchById(businessId, branchId));
+                () -> branchService.getBranchById(
+                        tenantId, businessId, branchId));
     }
 
     // UPDATE BRANCH
@@ -216,6 +233,7 @@ class BranchServiceTest {
         Branch existingBranch = new Branch();
         existingBranch.setName("Old Branch");
         existingBranch.setCode("OLD001");
+        existingBranch.setBusiness(business);
 
         UpdateBranchRequest request = new UpdateBranchRequest(
                 "Updated Branch",
@@ -225,7 +243,10 @@ class BranchServiceTest {
                 "Nairobi"
         );
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.of(existingBranch));
 
         when(branchRepository.existsByBusiness_IdAndName(
@@ -240,7 +261,7 @@ class BranchServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Branch result = branchService.updateBranch(
-                businessId, branchId, request);
+                tenantId, businessId, branchId, request);
 
         assertEquals("Updated Branch", result.getName());
         assertEquals("NEW001", result.getCode());
@@ -258,14 +279,17 @@ class BranchServiceTest {
         branch.setActive(true);
         branch.setBusiness(business);
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.of(branch));
 
         when(branchRepository.save(any(Branch.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Branch result = branchService.updateBranchStatus(
-                businessId, branchId, false);
+                tenantId, businessId, branchId, false);
 
         assertFalse(result.isActive());
     }
@@ -279,12 +303,15 @@ class BranchServiceTest {
         branch.setActive(false);
         branch.setBusiness(business);
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.of(branch));
 
         assertThrows(IllegalArgumentException.class,
                 () -> branchService.updateBranchStatus(
-                        businessId, branchId, true));
+                        tenantId, businessId, branchId, true));
 
         verify(branchRepository, never()).save(any());
     }
@@ -296,14 +323,19 @@ class BranchServiceTest {
 
         Branch branch = new Branch();
         branch.setActive(true);
+        branch.setBusiness(business);
 
-        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+        mockBusinessExists();
+
+        when(branchRepository.findByIdAndBusiness_Id(
+                branchId, businessId))
                 .thenReturn(Optional.of(branch));
 
         when(branchRepository.save(any(Branch.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Branch result = branchService.deleteBranch(businessId, branchId);
+        Branch result = branchService.deleteBranch(
+                tenantId, businessId, branchId);
 
         assertFalse(result.isActive());
 
