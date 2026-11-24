@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.inventory;
 
 import com.possaas.possaasbackend.branch.Branch;
@@ -9,7 +8,9 @@ import com.possaas.possaasbackend.inventory.dto.CreateInventoryRequest;
 import com.possaas.possaasbackend.inventory.dto.InventoryResponse;
 import com.possaas.possaasbackend.inventory.dto.UpdateInventoryRequest;
 import com.possaas.possaasbackend.product.Product;
+
 import com.possaas.possaasbackend.product.ProductRepository;
+import com.possaas.possaasbackend.productvariant.ProductVariant;
 import com.possaas.possaasbackend.productvariant.ProductVariantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
@@ -62,8 +63,17 @@ public class InventoryService {
         Product product = getProductByBusiness(request.productId(), businessId);
         validateProductIsActive(product);
 
+        ProductVariant productVariant = null;
+
         if (request.productVariantId() != null) {
+
             validateProductVariant(
+                    request.productVariantId(),
+                    businessId,
+                    request.productId()
+            );
+
+            productVariant = getProductVariant(
                     request.productVariantId(),
                     businessId,
                     request.productId()
@@ -97,7 +107,13 @@ public class InventoryService {
 
         Inventory savedInventory = inventoryRepository.save(inventory);
 
-        return InventoryResponse.from(savedInventory);
+        return InventoryResponse.from(
+                savedInventory,
+                business,
+                branch,
+                product,
+                productVariant
+        );
     }
 
     // =========================================================
@@ -120,7 +136,7 @@ public class InventoryService {
         return inventoryRepository
                 .findByBusinessIdAndBranchId(businessId, branchId)
                 .stream()
-                .map(InventoryResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -152,7 +168,7 @@ public class InventoryService {
                         productId
                 )
                 .stream()
-                .map(InventoryResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -176,7 +192,7 @@ public class InventoryService {
                         "Inventory not found"
                 ));
 
-        return InventoryResponse.from(inventory);
+        return toResponse(inventory);
     }
 
     // =========================================================
@@ -195,7 +211,7 @@ public class InventoryService {
         return inventoryRepository
                 .findByBusinessId(businessId)
                 .stream()
-                .map(InventoryResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -223,7 +239,56 @@ public class InventoryService {
 
         Inventory updatedInventory = inventoryRepository.save(inventory);
 
-        return InventoryResponse.from(updatedInventory);
+        return toResponse(updatedInventory);
+    }
+
+    // =========================================================
+    // RESPONSE MAPPER
+    // =========================================================
+
+    private InventoryResponse toResponse(Inventory inventory) {
+
+        Business business = businessRepository
+                .findById(inventory.getBusinessId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Business not found for inventory"
+                ));
+
+        Branch branch = branchRepository
+                .findByIdAndBusiness_Id(
+                        inventory.getBranchId(),
+                        inventory.getBusinessId()
+                )
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Branch not found for inventory"
+                ));
+
+        Product product = productRepository
+                .findByIdAndBusiness_Id(
+                        inventory.getProductId(),
+                        inventory.getBusinessId()
+                )
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product not found for inventory"
+                ));
+
+        ProductVariant productVariant = null;
+
+        if (inventory.getProductVariantId() != null) {
+            productVariant = getProductVariant(
+                    inventory.getProductVariantId(),
+                    inventory.getBusinessId(),
+                    inventory.getProductId()
+            );
+        }
+
+        return InventoryResponse.from(
+                inventory,
+                business,
+                branch,
+                product,
+                productVariant
+        );
     }
 
     // =========================================================
@@ -302,5 +367,22 @@ public class InventoryService {
                     "Active product variant not found for this product"
             );
         }
+    }
+
+    private ProductVariant getProductVariant(
+            UUID variantId,
+            UUID businessId,
+            UUID productId
+    ) {
+
+        return productVariantRepository
+                .findByIdAndBusinessIdAndProductId(
+                        variantId,
+                        businessId,
+                        productId
+                )
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Product variant not found"
+                ));
     }
 }
