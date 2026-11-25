@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface StockMovementRepository extends JpaRepository<StockMovement, UUID> {
@@ -62,5 +63,11 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
             UUID branchId,
             StockMovementType movementType,
             Pageable pageable
+    );
+    Optional<StockMovement> findByIdAndTenantIdAndBusinessIdAndBranchId(
+            UUID id,
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId
     );
 }

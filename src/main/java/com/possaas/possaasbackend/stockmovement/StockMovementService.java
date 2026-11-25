@@ -4,12 +4,15 @@ import com.possaas.possaasbackend.branch.Branch;
 import com.possaas.possaasbackend.branch.BranchRepository;
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
+import com.possaas.possaasbackend.common.pagination.PageResponse;
 import com.possaas.possaasbackend.inventory.Inventory;
 import com.possaas.possaasbackend.inventory.InventoryRepository;
 import com.possaas.possaasbackend.stockmovement.dto.StockAdjustmentRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementResponse;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -226,6 +229,125 @@ public class StockMovementService {
     }
 
     // =========================================================
+    // BRANCH STOCK MOVEMENT HISTORY
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public PageResponse<StockMovementResponse> getBranchMovements(
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId,
+            Pageable pageable
+    ) {
+
+        validateBusinessAndBranch(
+                tenantId,
+                businessId,
+                branchId
+        );
+
+        Page<StockMovement> movements =
+                stockMovementRepository
+                        .findByTenantIdAndBusinessIdAndBranchIdOrderByCreatedAtDesc(
+                                tenantId,
+                                businessId,
+                                branchId,
+                                pageable
+                        );
+
+        return PageResponse.of(
+                movements,
+                movements.getContent()
+                        .stream()
+                        .map(StockMovementResponse::from)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // INVENTORY STOCK MOVEMENT HISTORY
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public PageResponse<StockMovementResponse> getInventoryMovements(
+            UUID tenantId,
+            UUID businessId,
+            UUID inventoryId,
+            Pageable pageable
+    ) {
+
+        validateBusiness(
+                tenantId,
+                businessId
+        );
+
+        // Verify that the inventory record belongs to this business.
+        inventoryRepository
+                .findByIdAndBusinessId(
+                        inventoryId,
+                        businessId
+                )
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Inventory not found for this business"
+                ));
+
+        Page<StockMovement> movements =
+                stockMovementRepository
+                        .findByTenantIdAndBusinessIdAndInventoryIdOrderByCreatedAtDesc(
+                                tenantId,
+                                businessId,
+                                inventoryId,
+                                pageable
+                        );
+
+        return PageResponse.of(
+                movements,
+                movements.getContent()
+                        .stream()
+                        .map(StockMovementResponse::from)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // GET SINGLE STOCK MOVEMENT
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public StockMovementResponse getMovementById(
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId,
+            UUID movementId
+    ) {
+
+        validateBusinessAndBranch(
+                tenantId,
+                businessId,
+                branchId
+        );
+
+        StockMovement movement = stockMovementRepository
+                .findById(movementId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Stock movement not found"
+                ));
+
+        // Scope the movement to the authenticated tenant,
+        // business, and branch.
+        if (!movement.getTenantId().equals(tenantId)
+                || !movement.getBusinessId().equals(businessId)
+                || !movement.getBranchId().equals(branchId)) {
+
+            throw new EntityNotFoundException(
+                    "Stock movement not found"
+            );
+        }
+
+        return StockMovementResponse.from(movement);
+    }
+
+    // =========================================================
     // LOCK INVENTORY
     // =========================================================
 
@@ -277,6 +399,28 @@ public class StockMovementService {
         if (!branch.isActive()) {
             throw new IllegalArgumentException(
                     "Branch is inactive"
+            );
+        }
+    }
+
+    // =========================================================
+    // BUSINESS VALIDATION
+    // =========================================================
+
+    private void validateBusiness(
+            UUID tenantId,
+            UUID businessId
+    ) {
+
+        Business business = businessRepository
+                .findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Business not found"
+                ));
+
+        if (!business.isActive()) {
+            throw new IllegalArgumentException(
+                    "Business is inactive"
             );
         }
     }
