@@ -76,7 +76,7 @@ public class StockMovementController {
     // STOCK ADJUSTMENT
     // =========================================================
 
-    @PostMapping("/adjustments")
+    @PostMapping("/adjust")
     public ApiResponse<StockMovementResponse> adjustStock(
             @PathVariable UUID businessId,
             @PathVariable UUID branchId,
