@@ -4,19 +4,31 @@ import com.possaas.possaasbackend.branch.Branch;
 import com.possaas.possaasbackend.branch.BranchRepository;
 import com.possaas.possaasbackend.business.Business;
 import com.possaas.possaasbackend.business.BusinessRepository;
+import com.possaas.possaasbackend.common.pagination.PageResponse;
 import com.possaas.possaasbackend.inventory.Inventory;
 import com.possaas.possaasbackend.inventory.InventoryRepository;
+import com.possaas.possaasbackend.product.Product;
+import com.possaas.possaasbackend.product.ProductRepository;
+import com.possaas.possaasbackend.productvariant.ProductVariant;
+import com.possaas.possaasbackend.productvariant.ProductVariantRepository;
 import com.possaas.possaasbackend.stockmovement.dto.StockAdjustmentRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementResponse;
+import com.possaas.possaasbackend.tenant.Tenant;
+import com.possaas.possaasbackend.tenant.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,6 +50,15 @@ class StockMovementServiceTest {
 
     @Mock
     private BranchRepository branchRepository;
+
+    @Mock
+    private TenantRepository tenantRepository;
+
+    @Mock
+    private ProductRepository productRepository;
+
+    @Mock
+    private ProductVariantRepository productVariantRepository;
 
     @Mock
     private Business business;
@@ -622,5 +643,135 @@ class StockMovementServiceTest {
 
         verifyNoInteractions(inventoryRepository);
         verifyNoInteractions(stockMovementRepository);
+    }
+
+    // =========================================================
+    // MOVEMENT HISTORY OBJECT MAPPING TESTS
+    // =========================================================
+
+    @Test
+    void getBranchMovementHistory_shouldReturnNestedObjectsInsteadOfIds() {
+
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        UUID movementId = UUID.randomUUID();
+
+        Tenant tenantEntity = new Tenant();
+        ReflectionTestUtils.setField(tenantEntity, "id", tenantId);
+        tenantEntity.setName("Acme Tenant");
+        tenantEntity.setCode("ACME");
+        tenantEntity.setEmail("acme@example.com");
+        tenantEntity.setActive(true);
+
+        Business businessEntity = new Business();
+        businessEntity.setId(businessId);
+        businessEntity.setTenant(tenantEntity);
+        businessEntity.setName("Main Store");
+        businessEntity.setActive(true);
+
+        Branch branchEntity = new Branch();
+        ReflectionTestUtils.setField(branchEntity, "id", branchId);
+        branchEntity.setBusiness(businessEntity);
+        branchEntity.setName("Downtown Branch");
+        branchEntity.setCode("DT-01");
+        branchEntity.setActive(true);
+
+        Product productEntity = new Product();
+        ReflectionTestUtils.setField(productEntity, "id", productId);
+        productEntity.setName("Coffee Beans");
+        productEntity.setSku("CB-001");
+        productEntity.setSellingPrice(new BigDecimal("15.00"));
+        productEntity.setActive(true);
+
+        ProductVariant variantEntity = new ProductVariant();
+        variantEntity.setId(variantId);
+        variantEntity.setBusinessId(businessId);
+        variantEntity.setProductId(productId);
+        variantEntity.setName("500g");
+        variantEntity.setSku("CB-001-500G");
+        variantEntity.setSellingPrice(new BigDecimal("18.00"));
+        variantEntity.setActive(true);
+
+        Inventory inventoryEntity = new Inventory();
+        ReflectionTestUtils.setField(inventoryEntity, "id", inventoryId);
+        inventoryEntity.setBusinessId(businessId);
+        inventoryEntity.setBranchId(branchId);
+        inventoryEntity.setProductId(productId);
+        inventoryEntity.setProductVariantId(variantId);
+        inventoryEntity.setQuantityOnHand(new BigDecimal("15.0000"));
+        inventoryEntity.setQuantityReserved(new BigDecimal("2.0000"));
+        inventoryEntity.setReorderLevel(new BigDecimal("5.0000"));
+
+        StockMovement movement = new StockMovement(
+                tenantId,
+                businessId,
+                branchId,
+                inventoryId,
+                productId,
+                variantId,
+                StockMovementType.ADJUSTMENT,
+                new BigDecimal("8.0000"),
+                new BigDecimal("7.0000"),
+                new BigDecimal("15.0000"),
+                null,
+                null,
+                "Physical stock count",
+                performedBy
+        );
+        ReflectionTestUtils.setField(movement, "id", movementId);
+
+        Page<StockMovement> movementPage = new PageImpl<>(List.of(movement));
+
+        when(businessRepository.findByIdAndTenantId(businessId, tenantId))
+                .thenReturn(Optional.of(businessEntity));
+        when(branchRepository.findByIdAndBusiness_Id(branchId, businessId))
+                .thenReturn(Optional.of(branchEntity));
+        when(stockMovementRepository.findByTenantIdAndBusinessIdAndBranchIdOrderByCreatedAtDesc(
+                eq(tenantId), eq(businessId), eq(branchId), any(Pageable.class)))
+                .thenReturn(movementPage);
+
+        when(tenantRepository.findAllById(any()))
+                .thenReturn(List.of(tenantEntity));
+        when(businessRepository.findAllById(any()))
+                .thenReturn(List.of(businessEntity));
+        when(branchRepository.findAllById(any()))
+                .thenReturn(List.of(branchEntity));
+        when(inventoryRepository.findAllById(any()))
+                .thenReturn(List.of(inventoryEntity));
+        when(productRepository.findAllById(any()))
+                .thenReturn(List.of(productEntity));
+        when(productVariantRepository.findAllById(any()))
+                .thenReturn(List.of(variantEntity));
+
+        PageResponse<StockMovementResponse> response =
+                stockMovementService.getBranchMovementHistory(tenantId, businessId, branchId, 0, 20);
+
+        assertEquals(1, response.getContent().size());
+        StockMovementResponse item = response.getContent().get(0);
+        assertEquals(movementId, item.id());
+        assertNotNull(item.tenant());
+        assertEquals(tenantId, item.tenant().getId());
+        assertEquals("Acme Tenant", item.tenant().getName());
+
+        assertNotNull(item.business());
+        assertEquals(businessId, item.business().id());
+        assertEquals("Main Store", item.business().name());
+
+        assertNotNull(item.branch());
+        assertEquals(branchId, item.branch().id());
+        assertEquals("Downtown Branch", item.branch().name());
+
+        assertNotNull(item.inventory());
+        assertEquals(inventoryId, item.inventory().id());
+        assertEquals(new BigDecimal("15.0000"), item.inventory().quantityOnHand());
+        assertEquals(new BigDecimal("13.0000"), item.inventory().quantityAvailable());
+
+        assertNotNull(item.product());
+        assertEquals(productId, item.product().id());
+        assertEquals("Coffee Beans", item.product().name());
+
+        assertNotNull(item.productVariant());
+        assertEquals(variantId, item.productVariant().id());
+        assertEquals("500g", item.productVariant().name());
     }
 }

@@ -7,9 +7,15 @@ import com.possaas.possaasbackend.business.BusinessRepository;
 import com.possaas.possaasbackend.common.pagination.PageResponse;
 import com.possaas.possaasbackend.inventory.Inventory;
 import com.possaas.possaasbackend.inventory.InventoryRepository;
+import com.possaas.possaasbackend.product.Product;
+import com.possaas.possaasbackend.product.ProductRepository;
+import com.possaas.possaasbackend.productvariant.ProductVariant;
+import com.possaas.possaasbackend.productvariant.ProductVariantRepository;
 import com.possaas.possaasbackend.stockmovement.dto.StockAdjustmentRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementResponse;
+import com.possaas.possaasbackend.tenant.Tenant;
+import com.possaas.possaasbackend.tenant.TenantRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -19,7 +25,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -29,17 +42,26 @@ public class StockMovementService {
     private final InventoryRepository inventoryRepository;
     private final BusinessRepository businessRepository;
     private final BranchRepository branchRepository;
+    private final TenantRepository tenantRepository;
+    private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
 
     public StockMovementService(
             StockMovementRepository stockMovementRepository,
             InventoryRepository inventoryRepository,
             BusinessRepository businessRepository,
-            BranchRepository branchRepository
+            BranchRepository branchRepository,
+            TenantRepository tenantRepository,
+            ProductRepository productRepository,
+            ProductVariantRepository productVariantRepository
     ) {
         this.stockMovementRepository = stockMovementRepository;
         this.inventoryRepository = inventoryRepository;
         this.businessRepository = businessRepository;
         this.branchRepository = branchRepository;
+        this.tenantRepository = tenantRepository;
+        this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
     }
 
     // =========================================================
@@ -56,7 +78,7 @@ public class StockMovementService {
 
         validateRequestQuantity(request.quantity());
 
-        validateBusinessAndBranch(
+        ValidatedBusinessAndBranch context = validateBusinessAndBranch(
                 tenantId,
                 businessId,
                 branchId
@@ -91,8 +113,11 @@ public class StockMovementService {
                 performedBy
         );
 
-        return StockMovementResponse.from(
-                stockMovementRepository.save(movement)
+        return toResponse(
+                stockMovementRepository.save(movement),
+                context.business(),
+                context.branch(),
+                inventory
         );
     }
 
@@ -110,7 +135,7 @@ public class StockMovementService {
 
         validateRequestQuantity(request.quantity());
 
-        validateBusinessAndBranch(
+        ValidatedBusinessAndBranch context = validateBusinessAndBranch(
                 tenantId,
                 businessId,
                 branchId
@@ -158,8 +183,11 @@ public class StockMovementService {
                 performedBy
         );
 
-        return StockMovementResponse.from(
-                stockMovementRepository.save(movement)
+        return toResponse(
+                stockMovementRepository.save(movement),
+                context.business(),
+                context.branch(),
+                inventory
         );
     }
 
@@ -177,7 +205,7 @@ public class StockMovementService {
 
         validateAdjustmentQuantity(request.quantity());
 
-        validateBusinessAndBranch(
+        ValidatedBusinessAndBranch context = validateBusinessAndBranch(
                 tenantId,
                 businessId,
                 branchId
@@ -225,8 +253,11 @@ public class StockMovementService {
                 performedBy
         );
 
-        return StockMovementResponse.from(
-                stockMovementRepository.save(movement)
+        return toResponse(
+                stockMovementRepository.save(movement),
+                context.business(),
+                context.branch(),
+                inventory
         );
     }
 
@@ -259,10 +290,7 @@ public class StockMovementService {
 
         return PageResponse.of(
                 movements,
-                movements.getContent()
-                        .stream()
-                        .map(StockMovementResponse::from)
-                        .toList()
+                toResponses(movements.getContent())
         );
     }
 
@@ -304,10 +332,7 @@ public class StockMovementService {
 
         return PageResponse.of(
                 movements,
-                movements.getContent()
-                        .stream()
-                        .map(StockMovementResponse::from)
-                        .toList()
+                toResponses(movements.getContent())
         );
     }
 
@@ -323,7 +348,7 @@ public class StockMovementService {
             UUID movementId
     ) {
 
-        validateBusinessAndBranch(
+        ValidatedBusinessAndBranch context = validateBusinessAndBranch(
                 tenantId,
                 businessId,
                 branchId
@@ -346,7 +371,16 @@ public class StockMovementService {
             );
         }
 
-        return StockMovementResponse.from(movement);
+        Inventory inventory = movement.getInventoryId() != null
+                ? inventoryRepository.findById(movement.getInventoryId()).orElse(null)
+                : null;
+
+        return toResponse(
+                movement,
+                context.business(),
+                context.branch(),
+                inventory
+        );
     }
 
     // =========================================================
@@ -374,7 +408,7 @@ public class StockMovementService {
     // BUSINESS AND BRANCH VALIDATION
     // =========================================================
 
-    private void validateBusinessAndBranch(
+    private ValidatedBusinessAndBranch validateBusinessAndBranch(
             UUID tenantId,
             UUID businessId,
             UUID branchId
@@ -403,6 +437,116 @@ public class StockMovementService {
                     "Branch is inactive"
             );
         }
+
+        return new ValidatedBusinessAndBranch(business, branch);
+    }
+
+    // =========================================================
+    // RESPONSE MAPPING
+    // =========================================================
+
+    private StockMovementResponse toResponse(
+            StockMovement movement,
+            Business business,
+            Branch branch,
+            Inventory inventory
+    ) {
+
+        Tenant tenant = business != null && business.getTenant() != null
+                ? business.getTenant()
+                : (movement.getTenantId() != null
+                        ? tenantRepository.findById(movement.getTenantId()).orElse(null)
+                        : null);
+
+        Product product = movement.getProductId() != null
+                ? productRepository.findById(movement.getProductId()).orElse(null)
+                : null;
+
+        ProductVariant productVariant = movement.getProductVariantId() != null
+                ? productVariantRepository.findById(movement.getProductVariantId()).orElse(null)
+                : null;
+
+        return StockMovementResponse.from(
+                movement,
+                tenant,
+                business,
+                branch,
+                inventory,
+                product,
+                productVariant
+        );
+    }
+
+    private List<StockMovementResponse> toResponses(List<StockMovement> movements) {
+
+        if (movements.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> tenantIds = collectIds(movements, StockMovement::getTenantId);
+        Set<UUID> businessIds = collectIds(movements, StockMovement::getBusinessId);
+        Set<UUID> branchIds = collectIds(movements, StockMovement::getBranchId);
+        Set<UUID> inventoryIds = collectIds(movements, StockMovement::getInventoryId);
+        Set<UUID> productIds = collectIds(movements, StockMovement::getProductId);
+        Set<UUID> variantIds = collectIds(movements, StockMovement::getProductVariantId);
+
+        Map<UUID, Tenant> tenantsById = tenantIds.isEmpty()
+                ? Collections.emptyMap()
+                : tenantRepository.findAllById(tenantIds).stream()
+                        .collect(Collectors.toMap(Tenant::getId, Function.identity()));
+
+        Map<UUID, Business> businessesById = businessIds.isEmpty()
+                ? Collections.emptyMap()
+                : businessRepository.findAllById(businessIds).stream()
+                        .collect(Collectors.toMap(Business::getId, Function.identity()));
+
+        Map<UUID, Branch> branchesById = branchIds.isEmpty()
+                ? Collections.emptyMap()
+                : branchRepository.findAllById(branchIds).stream()
+                        .collect(Collectors.toMap(Branch::getId, Function.identity()));
+
+        Map<UUID, Inventory> inventoriesById = inventoryIds.isEmpty()
+                ? Collections.emptyMap()
+                : inventoryRepository.findAllById(inventoryIds).stream()
+                        .collect(Collectors.toMap(Inventory::getId, Function.identity()));
+
+        Map<UUID, Product> productsById = productIds.isEmpty()
+                ? Collections.emptyMap()
+                : productRepository.findAllById(productIds).stream()
+                        .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        Map<UUID, ProductVariant> variantsById = variantIds.isEmpty()
+                ? Collections.emptyMap()
+                : productVariantRepository.findAllById(variantIds).stream()
+                        .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+
+        return movements.stream()
+                .map(movement -> StockMovementResponse.from(
+                        movement,
+                        tenantsById.get(movement.getTenantId()),
+                        businessesById.get(movement.getBusinessId()),
+                        branchesById.get(movement.getBranchId()),
+                        inventoriesById.get(movement.getInventoryId()),
+                        productsById.get(movement.getProductId()),
+                        variantsById.get(movement.getProductVariantId())
+                ))
+                .toList();
+    }
+
+    private Set<UUID> collectIds(
+            List<StockMovement> movements,
+            Function<StockMovement, UUID> idExtractor
+    ) {
+        return movements.stream()
+                .map(idExtractor)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    private record ValidatedBusinessAndBranch(
+            Business business,
+            Branch branch
+    ) {
     }
 
     // =========================================================
@@ -519,10 +663,7 @@ public class StockMovementService {
 
         return PageResponse.of(
                 movements,
-                movements.getContent()
-                        .stream()
-                        .map(StockMovementResponse::from)
-                        .toList()
+                toResponses(movements.getContent())
         );
     }
     // =========================================================
@@ -581,10 +722,7 @@ public class StockMovementService {
 
         return PageResponse.of(
                 movements,
-                movements.getContent()
-                        .stream()
-                        .map(StockMovementResponse::from)
-                        .toList()
+                toResponses(movements.getContent())
         );
     }
 }
