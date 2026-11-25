@@ -12,7 +12,9 @@ import com.possaas.possaasbackend.stockmovement.dto.StockMovementRequest;
 import com.possaas.possaasbackend.stockmovement.dto.StockMovementResponse;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -479,6 +481,110 @@ public class StockMovementService {
                 referenceId,
                 reason,
                 performedBy
+        );
+    }
+    // =========================================================
+// BRANCH STOCK MOVEMENT HISTORY
+// =========================================================
+
+    @Transactional(readOnly = true)
+    public PageResponse<StockMovementResponse> getBranchMovementHistory(
+            UUID tenantId,
+            UUID businessId,
+            UUID branchId,
+            int page,
+            int size
+    ) {
+
+        validateBusinessAndBranch(
+                tenantId,
+                businessId,
+                branchId
+        );
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<StockMovement> movements =
+                stockMovementRepository
+                        .findByTenantIdAndBusinessIdAndBranchIdOrderByCreatedAtDesc(
+                                tenantId,
+                                businessId,
+                                branchId,
+                                pageable
+                        );
+
+        return PageResponse.of(
+                movements,
+                movements.getContent()
+                        .stream()
+                        .map(StockMovementResponse::from)
+                        .toList()
+        );
+    }
+    // =========================================================
+// INVENTORY MOVEMENT HISTORY
+// =========================================================
+
+    @Transactional(readOnly = true)
+    public PageResponse<StockMovementResponse> getInventoryMovementHistory(
+            UUID tenantId,
+            UUID businessId,
+            UUID inventoryId,
+            int page,
+            int size
+    ) {
+
+        validateBusiness(
+                tenantId,
+                businessId
+        );
+
+        if (page < 0) {
+            throw new IllegalArgumentException(
+                    "Page number cannot be negative"
+            );
+        }
+
+        if (size < 1 || size > 100) {
+            throw new IllegalArgumentException(
+                    "Page size must be between 1 and 100"
+            );
+        }
+
+        inventoryRepository
+                .findByIdAndBusinessId(
+                        inventoryId,
+                        businessId
+                )
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Inventory not found for this business"
+                ));
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<StockMovement> movements =
+                stockMovementRepository
+                        .findByTenantIdAndBusinessIdAndInventoryIdOrderByCreatedAtDesc(
+                                tenantId,
+                                businessId,
+                                inventoryId,
+                                pageable
+                        );
+
+        return PageResponse.of(
+                movements,
+                movements.getContent()
+                        .stream()
+                        .map(StockMovementResponse::from)
+                        .toList()
         );
     }
 }

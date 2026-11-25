@@ -138,7 +138,7 @@ public class StockMovementController {
 
         AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
 
-        StockMovementResponse response = stockMovementService.getMovement(
+        StockMovementResponse response = stockMovementService.getMovementById(
                 user.tenantId(),
                 businessId,
                 branchId,
