@@ -1,3 +1,4 @@
+
 CREATE TABLE stock_movements (
                                  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -38,3 +39,27 @@ CREATE TABLE stock_movements (
                                              )
                                          )
 );
+
+-- Business lookup
+CREATE INDEX idx_stock_movements_business
+    ON stock_movements (business_id);
+
+-- Branch lookup
+CREATE INDEX idx_stock_movements_branch
+    ON stock_movements (business_id, branch_id);
+
+-- Inventory history
+CREATE INDEX idx_stock_movements_inventory
+    ON stock_movements (inventory_id);
+
+-- Product movement history
+CREATE INDEX idx_stock_movements_product
+    ON stock_movements (business_id, product_id);
+
+-- Date-based reporting
+CREATE INDEX idx_stock_movements_created_at
+    ON stock_movements (business_id, created_at DESC);
+
+-- Reference lookup (sales, purchases, transfers, etc.)
+CREATE INDEX idx_stock_movements_reference
+    ON stock_movements (reference_type, reference_id);
