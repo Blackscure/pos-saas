@@ -81,7 +81,9 @@ public class InventoryService {
             );
 
             productVariant = getProductVariant(
-                    request.productVariantId()
+                    request.productVariantId(),
+                    businessId,
+                    request.productId()
             );
         }
 
@@ -260,13 +262,19 @@ public class InventoryService {
                 ));
 
         Branch branch = branchRepository
-                .findById(inventory.getBranchId())
+                .findByIdAndBusiness_Id(
+                        inventory.getBranchId(),
+                        inventory.getBusinessId()
+                )
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Branch not found for inventory"
                 ));
 
         Product product = productRepository
-                .findById(inventory.getProductId())
+                .findByIdAndBusiness_Id(
+                        inventory.getProductId(),
+                        inventory.getBusinessId()
+                )
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Product not found for inventory"
                 ));
@@ -275,7 +283,9 @@ public class InventoryService {
 
         if (inventory.getProductVariantId() != null) {
             productVariant = getProductVariant(
-                    inventory.getProductVariantId()
+                    inventory.getProductVariantId(),
+                    inventory.getBusinessId(),
+                    inventory.getProductId()
             );
         }
 
@@ -372,10 +382,18 @@ public class InventoryService {
         }
     }
 
-    private ProductVariant getProductVariant(UUID variantId) {
+    private ProductVariant getProductVariant(
+            UUID variantId,
+            UUID businessId,
+            UUID productId
+    ) {
 
         return productVariantRepository
-                .findById(variantId)
+                .findByIdAndBusinessIdAndProductId(
+                        variantId,
+                        businessId,
+                        productId
+                )
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Product variant not found"
                 ));

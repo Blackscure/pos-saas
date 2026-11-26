@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.supplier.dto;
 
 import com.possaas.possaasbackend.supplier.Supplier;
