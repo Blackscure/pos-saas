@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,22 +38,33 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
             UUID businessId
     );
 
+    default Page<Supplier> searchByBusiness(
+            UUID businessId,
+            String search,
+            Pageable pageable
+    ) {
+        if (search == null || search.isBlank()) {
+            return findAllByBusiness_Id(businessId, pageable);
+        }
+
+        String pattern = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
+        return searchByBusinessWithPattern(businessId, pattern, pageable);
+    }
+
     @Query("""
             SELECT s FROM Supplier s
             WHERE s.business.id = :businessId
             AND (
-                :search IS NULL
-                OR TRIM(:search) = ''
-                OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(COALESCE(s.contactPerson, '')) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(COALESCE(s.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
-                OR LOWER(COALESCE(s.taxPin, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                LOWER(s.name) LIKE :pattern
+                OR LOWER(COALESCE(s.contactPerson, '')) LIKE :pattern
+                OR LOWER(COALESCE(s.phone, '')) LIKE :pattern
+                OR LOWER(COALESCE(s.email, '')) LIKE :pattern
+                OR LOWER(COALESCE(s.taxPin, '')) LIKE :pattern
             )
             """)
-    Page<Supplier> searchByBusiness(
+    Page<Supplier> searchByBusinessWithPattern(
             @Param("businessId") UUID businessId,
-            @Param("search") String search,
+            @Param("pattern") String pattern,
             Pageable pageable
     );
 }
