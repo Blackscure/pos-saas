@@ -1,4 +1,3 @@
-
 package com.possaas.possaasbackend.purchaseorder;
 
 import com.possaas.possaasbackend.common.pagination.PageResponse;
@@ -211,6 +210,32 @@ public class PurchaseOrderController {
 
         return ApiResponse.success(
                 "Purchase order rejected successfully",
+                purchaseOrder
+        );
+    }
+
+    // =========================================================
+    // CANCEL PURCHASE ORDER
+    // =========================================================
+
+    @PostMapping("/{purchaseOrderId}/cancel")
+    @PreAuthorize("hasAuthority('PURCHASE_ORDER_CANCEL') and #businessId == authentication.principal.businessId")
+    public ApiResponse<PurchaseOrderResponse> cancelPurchaseOrder(
+            @PathVariable UUID businessId,
+            @PathVariable UUID purchaseOrderId,
+            Authentication authentication
+    ) {
+        AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
+
+        PurchaseOrderResponse purchaseOrder =
+                purchaseOrderService.cancelPurchaseOrder(
+                        businessId,
+                        user.tenantId(),
+                        purchaseOrderId
+                );
+
+        return ApiResponse.success(
+                "Purchase order cancelled successfully",
                 purchaseOrder
         );
     }
