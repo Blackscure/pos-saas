@@ -160,4 +160,58 @@ public class PurchaseOrderController {
                 purchaseOrder
         );
     }
+
+    // =========================================================
+    // APPROVE PURCHASE ORDER
+    // =========================================================
+
+    @PostMapping("/{purchaseOrderId}/approve")
+    @PreAuthorize("hasAuthority('PURCHASE_ORDER_APPROVE') and #businessId == authentication.principal.businessId")
+    public ApiResponse<PurchaseOrderResponse> approvePurchaseOrder(
+            @PathVariable UUID businessId,
+            @PathVariable UUID purchaseOrderId,
+            Authentication authentication
+    ) {
+        AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
+
+        PurchaseOrderResponse purchaseOrder =
+                purchaseOrderService.approvePurchaseOrder(
+                        businessId,
+                        user.tenantId(),
+                        purchaseOrderId,
+                        user.userId()
+                );
+
+        return ApiResponse.success(
+                "Purchase order approved successfully",
+                purchaseOrder
+        );
+    }
+
+    // =========================================================
+    // REJECT PURCHASE ORDER
+    // =========================================================
+
+    @PostMapping("/{purchaseOrderId}/reject")
+    @PreAuthorize("hasAuthority('PURCHASE_ORDER_REJECT') and #businessId == authentication.principal.businessId")
+    public ApiResponse<PurchaseOrderResponse> rejectPurchaseOrder(
+            @PathVariable UUID businessId,
+            @PathVariable UUID purchaseOrderId,
+            Authentication authentication
+    ) {
+        AuthenticatedUser user = (AuthenticatedUser) authentication.getPrincipal();
+
+        PurchaseOrderResponse purchaseOrder =
+                purchaseOrderService.rejectPurchaseOrder(
+                        businessId,
+                        user.tenantId(),
+                        purchaseOrderId,
+                        user.userId()
+                );
+
+        return ApiResponse.success(
+                "Purchase order rejected successfully",
+                purchaseOrder
+        );
+    }
 }

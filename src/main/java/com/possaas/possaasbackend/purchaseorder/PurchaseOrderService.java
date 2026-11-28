@@ -1,3 +1,4 @@
+
 package com.possaas.possaasbackend.purchaseorder;
 
 import com.possaas.possaasbackend.branch.Branch;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -228,6 +230,153 @@ public class PurchaseOrderService {
         }
 
         purchaseOrder.setStatus(PurchaseOrderStatus.SUBMITTED);
+
+        PurchaseOrder savedPurchaseOrder = purchaseOrderRepository.save(purchaseOrder);
+
+        return toResponse(savedPurchaseOrder, items);
+    }
+
+    // =========================================================
+    // APPROVE PURCHASE ORDER
+    // =========================================================
+
+    @Transactional
+    public PurchaseOrderResponse approvePurchaseOrder(
+            UUID businessId,
+            UUID tenantId,
+            UUID purchaseOrderId,
+            UUID approverId
+    ) {
+        businessRepository.findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Business not found"));
+
+        PurchaseOrder purchaseOrder = purchaseOrderRepository
+                .findByIdAndBusinessId(purchaseOrderId, businessId)
+                .orElseThrow(() -> new EntityNotFoundException("Purchase order not found"));
+
+        if (purchaseOrder.getStatus() != PurchaseOrderStatus.SUBMITTED) {
+            throw new IllegalStateException(
+                    "Only submitted purchase orders can be approved"
+            );
+        }
+
+        User approver = userRepository.findByIdAndBusiness_Id(approverId, businessId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Approver not found for this business"
+                ));
+
+        if (!purchaseOrder.getSupplier().isActive()) {
+            throw new IllegalStateException(
+                    "Cannot approve purchase order for an inactive supplier"
+            );
+        }
+
+        List<PurchaseOrderItem> items =
+                purchaseOrderItemRepository.findByPurchaseOrderIdOrderByIdAsc(
+                        purchaseOrderId
+                );
+
+        if (items.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot approve a purchase order without items"
+            );
+        }
+
+        purchaseOrder.setStatus(PurchaseOrderStatus.APPROVED);
+        purchaseOrder.setApprovedBy(approver);
+        purchaseOrder.setApprovedAt(LocalDateTime.now());
+
+        PurchaseOrder savedPurchaseOrder = purchaseOrderRepository.save(purchaseOrder);
+
+        return toResponse(savedPurchaseOrder, items);
+    }
+
+    // =========================================================
+    // REJECT PURCHASE ORDER
+    // =========================================================
+
+    @Transactional
+    public PurchaseOrderResponse rejectPurchaseOrder(
+            UUID businessId,
+            UUID tenantId,
+            UUID purchaseOrderId,
+            UUID rejectedById
+    ) {
+        businessRepository.findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Business not found"));
+
+        PurchaseOrder purchaseOrder = purchaseOrderRepository
+                .findByIdAndBusinessId(purchaseOrderId, businessId)
+                .orElseThrow(() -> new EntityNotFoundException("Purchase order not found"));
+
+        if (purchaseOrder.getStatus() != PurchaseOrderStatus.SUBMITTED) {
+            throw new IllegalStateException(
+                    "Only submitted purchase orders can be rejected"
+            );
+        }
+
+        userRepository.findByIdAndBusiness_Id(rejectedById, businessId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Rejecting user not found for this business"
+                ));
+
+        List<PurchaseOrderItem> items =
+                purchaseOrderItemRepository.findByPurchaseOrderIdOrderByIdAsc(
+                        purchaseOrderId
+                );
+
+        if (items.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot reject a purchase order without items"
+            );
+        }
+
+        purchaseOrder.setStatus(PurchaseOrderStatus.REJECTED);
+
+        PurchaseOrder savedPurchaseOrder = purchaseOrderRepository.save(purchaseOrder);
+
+        return toResponse(savedPurchaseOrder, items);
+    }
+
+    // =========================================================
+// CANCEL PURCHASE ORDER
+// =========================================================
+
+    @Transactional
+    public PurchaseOrderResponse cancelPurchaseOrder(
+            UUID businessId,
+            UUID tenantId,
+            UUID purchaseOrderId
+    ) {
+        businessRepository.findByIdAndTenantId(businessId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Business not found"));
+
+        PurchaseOrder purchaseOrder = purchaseOrderRepository
+                .findByIdAndBusinessId(purchaseOrderId, businessId)
+                .orElseThrow(() -> new EntityNotFoundException("Purchase order not found"));
+
+        PurchaseOrderStatus currentStatus = purchaseOrder.getStatus();
+
+        if (currentStatus != PurchaseOrderStatus.DRAFT
+                && currentStatus != PurchaseOrderStatus.SUBMITTED
+                && currentStatus != PurchaseOrderStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Purchase order cannot be cancelled in its current status: " + currentStatus
+            );
+        }
+
+        List<PurchaseOrderItem> items =
+                purchaseOrderItemRepository.findByPurchaseOrderIdOrderByIdAsc(
+                        purchaseOrderId
+                );
+
+        if (items.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot cancel a purchase order without items"
+            );
+        }
+
+        purchaseOrder.setStatus(PurchaseOrderStatus.CANCELLED);
 
         PurchaseOrder savedPurchaseOrder = purchaseOrderRepository.save(purchaseOrder);
 
